@@ -1,6 +1,6 @@
 # CluChess Backend Implementation Plan
 
-> **Source of truth:** [`Architecture.md`](Architecture.md), design proposal v1.0  
+> **Source of truth:** [`Architecture.md`](Architecture.md), approved architecture v1.1
 > **Plan status:** Implementation-ready after Phase 0 decisions are approved  
 > **Scope:** Complete backend for anonymous sessions, instant matchmaking, server-authoritative real-time chess, recovery, horizontal scaling, security, observability, testing, and deployment  
 > **Delivery model:** NestJS modular monolith, PostgreSQL as durable authority, Redis for ephemeral coordination, Socket.IO for realtime delivery
@@ -43,6 +43,8 @@ These rules apply to every phase and pull request.
 ## 3. Implementation gates to resolve first
 
 `Architecture.md` is authoritative, but the following details are under-specified or need a stronger durable guarantee. Phase 0 must record the final choices as short ADRs and update `Architecture.md` where a decision changes its schema or contract.
+
+> **Resolved 2026-07-24:** Gates A–H are accepted in [`docs/adr/`](docs/adr/). The accepted ADRs and [`docs/protocol-v1.md`](docs/protocol-v1.md) are normative for implementation.
 
 ### Gate A — One active game per guest
 
@@ -166,51 +168,55 @@ Freeze:
 
 ## Phase 0 — Architecture closure and contract freeze
 
+> **Status:** Complete — accepted 2026-07-24
+
 ### Objective
 
 Remove ambiguity from the invariants and public contracts before database migrations and client-facing handlers make those decisions expensive to change.
 
 ### Work
 
-- [ ] Create `docs/adr/` and record decisions for Gates A–H.
-- [ ] Define canonical domain enums:
+- [x] Create `docs/adr/` and record decisions for Gates A–H.
+- [x] Define canonical domain enums:
   - game status;
   - player color;
   - result;
   - termination reason;
   - user matchmaking state;
   - protocol error code.
-- [ ] Define the legal game-state transition table, including which transitions increment `games.version`.
-- [ ] Define the full v1 REST schemas and status/error responses.
-- [ ] Define the full v1 WS envelope, event payloads, acknowledgement shape, and error mapping.
-- [ ] Freeze the v1 event catalog:
+- [x] Define the legal game-state transition table, including which transitions increment `games.version`.
+- [x] Define the full v1 REST schemas and status/error responses.
+- [x] Define the full v1 WS envelope, event payloads, acknowledgement shape, and error mapping.
+- [x] Freeze the v1 event catalog:
   - C→S: `queue.join`, `queue.leave`, `game.ready`, `move.submit`, `game.resign`, `game.sync`, `heartbeat.ping`;
   - S→C: `session.ready`, `queue.joined`, `queue.left`, `match.found`, `game.snapshot`, `game.started`, `move.accepted`, `move.rejected`, `player.disconnected`, `player.reconnected`, `game.ended`, `heartbeat.pong`, `server.error`.
-- [ ] Specify identifier rules:
+- [x] Specify identifier rules:
   - UUID version and generation owner;
   - `eventId`;
   - `clientMoveId`;
   - matchmaking command IDs;
   - resignation command ID;
   - HTTP `Idempotency-Key`.
-- [ ] Specify default clock values, pause/resume behavior, increment rules, and timeout race rules.
-- [ ] Specify engine history input for threefold repetition.
-- [ ] Specify the durable one-active-game mechanism.
-- [ ] Specify the crash-recovery key connecting a Redis reservation to one PostgreSQL game.
-- [ ] Specify session token rotation, renewal idempotency, revocation, key rotation, cookie attributes, and Redis-outage behavior.
-- [ ] Specify all background jobs, their intervals, overlap behavior, and ownership strategy.
-- [ ] Turn all environment settings into a documented configuration matrix with local/test/production expectations.
-- [ ] Update `Architecture.md` if an approved ADR changes its schema or behavior.
+- [x] Specify default clock values, pause/resume behavior, increment rules, and timeout race rules.
+- [x] Specify engine history input for threefold repetition.
+- [x] Specify the durable one-active-game mechanism.
+- [x] Specify the crash-recovery key connecting a Redis reservation to one PostgreSQL game.
+- [x] Specify session token rotation, renewal idempotency, revocation, key rotation, cookie attributes, and Redis-outage behavior.
+- [x] Specify all background jobs, their intervals, overlap behavior, and ownership strategy.
+- [x] Turn all environment settings into a documented configuration matrix with local/test/production expectations.
+- [x] Update `Architecture.md` if an approved ADR changes its schema or behavior.
 
 ### Required artifacts
 
-- `docs/adr/*.md`
-- `src/common/protocol/` design definitions or a protocol specification ready to encode in Phase 1
-- approved PostgreSQL schema delta
-- approved Redis key/Lua input-output contract
-- approved state-machine and clock rules
+- [`docs/adr/*.md`](docs/adr/) — eight accepted decision records
+- [`docs/protocol-v1.md`](docs/protocol-v1.md) — protocol specification ready to encode in Phase 1
+- [`Architecture.md`](Architecture.md) §19 — approved PostgreSQL schema delta
+- [`Architecture.md`](Architecture.md) §13/§20 — approved Redis key/Lua input-output contract
+- ADRs [0003](docs/adr/0003-durable-server-clocks.md), [0006](docs/adr/0006-game-transitions-and-terminal-races.md), and [0007](docs/adr/0007-leaderless-background-jobs.md) — approved state, clock, and job rules
 
 ### Exit criteria
+
+> **Result:** Passed. Gates A–H, schema deltas, protocol, state/clock rules, Redis contracts, and configuration are approved and linked above.
 
 - Every Gate A–H has one approved decision.
 - No critical invariant is guaranteed only by an in-memory value or Redis key.
@@ -388,18 +394,20 @@ Implement a low-PII anonymous identity that survives refresh, authenticates REST
 
 - [ ] `POST /v1/session`
   - create the guest and token;
-  - support optional `Idempotency-Key`;
-  - return the same result on a safe retry within its TTL;
+  - require UUID `Idempotency-Key`;
+  - persist/replay the same result through `session_commands`;
   - set the approved secure cookie if cookie delivery is enabled.
 - [ ] `POST /v1/session/renew`
   - authenticate the current session;
+  - require UUID `Idempotency-Key`;
   - apply the approved rotation policy;
   - return an idempotent result for a retried renewal.
 - [ ] `GET /v1/session`
   - return only the approved public guest/session fields.
 - [ ] `POST /v1/session/reset`
+  - require UUID `Idempotency-Key`;
   - revoke the session;
-  - add denylist state when required;
+  - add session-wide revocation and optional per-token denylist state;
   - expose a port for disconnecting all guest sockets once realtime is present;
   - treat a repeated reset as idempotent.
 - [ ] Apply Zod request/response validation and endpoint-specific rate limits.

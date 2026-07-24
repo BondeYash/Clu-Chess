@@ -1,8 +1,9 @@
 # CluChess — Backend Architecture
 
-> **Status:** Design proposal (v1.0). No code exists in this repository yet; this document is the authoritative blueprint the backend must be built against.
+> **Status:** Approved architecture (v1.1). Phase 0 decisions are accepted; runtime implementation has not begun.
 > **Audience:** Backend engineers and AI coding agents implementing the CluChess MVP.
 > **Scope:** Server-authoritative, anonymous, instant-matchmaking real-time chess. MVP first, horizontal scale second.
+> **Decision authority:** Accepted records in [`docs/adr/`](docs/adr/) and the normative [`docs/protocol-v1.md`](docs/protocol-v1.md) refine this blueprint and take precedence over older prose where explicitly noted.
 
 ---
 
@@ -380,6 +381,10 @@ cluchess/
 ├─ load-tests/
 │  ├─ artillery.socketio.yml
 │  └─ processors/                   # custom JS for matchmaking flow
+├─ docs/
+│  ├─ adr/                          # accepted architecture decisions
+│  ├─ protocol-v1.md                # normative HTTP/WS contract
+│  └─ configuration.md              # zero-touch Docker/config contract
 ├─ docker-compose.yml
 ├─ Dockerfile
 ├─ .env.example
@@ -397,7 +402,7 @@ cluchess/
 **Signed JWT (EdDSA / Ed25519), short-lived, backed by a `guest_sessions` row.**
 
 - **Why JWT over opaque token:** the Socket.IO handshake and frequent reconnections must verify identity *without a DB round-trip per connection*. A signed JWT is verified in-process in microseconds. An opaque token would force a Redis/DB lookup on every (re)connect — unnecessary load at 2,500 sockets.
-- **Why backed by a DB row + revocation list:** JWTs are otherwise unrevocable until expiry. We keep a `guest_sessions` row as the durable record and a **Redis denylist of revoked `jti`s** (TTL = remaining token life) so logout/reset takes effect immediately.
+- **Why backed by a DB row + revocation state:** JWTs are otherwise unrevocable until expiry. We keep a `guest_sessions` row as the durable record, a Redis session-revocation key that invalidates every token for a reset identity, and an optional per-`jti` denylist for individual credentials. Durable revoked rows rebuild Redis after loss (ADR 0005).
 
 **Token claims:**
 
@@ -414,7 +419,7 @@ cluchess/
 ```
 
 - **Signing:** EdDSA with a key pair held in secrets management. Public key allows any instance to verify; only the signer holds the private key. Key ID (`kid`) in the JWT header supports rotation.
-- **TTL:** 12 h access token. Renewal via `POST /v1/session/renew` (see §18) issues a fresh token if the session is not revoked/expired; sliding renewal keeps active players logged in without unbounded lifetime.
+- **TTL:** 12 h access token. Renewal via `POST /v1/session/renew` (see §18) issues a fresh token if the session is not revoked/expired. Previously issued access tokens remain valid until their own expiry unless the session/credential is revoked; this makes a lost renewal response safely retryable (ADR 0005).
 
 ### 12.2 Handshake delivery
 
@@ -427,7 +432,7 @@ const socket = io("wss://cluchess.example", {
 });
 ```
 
-The `ws-auth.middleware` verifies signature, `exp`, and the Redis denylist before the connection is accepted; failure → disconnect with `UNAUTHORIZED`.
+The `ws-auth.middleware` verifies signature, `exp`, token version, `kid`, `jwt:revoked-session:{guestId}`, and the optional per-`jti` denylist before the connection is accepted. A revoked token is rejected with `UNAUTHORIZED`; inability to check Redis revocation fails a new handshake closed with `SERVICE_UNAVAILABLE`.
 
 ### 12.3 Survival across refresh
 
@@ -437,8 +442,9 @@ The token is stored client-side (cookie + `localStorage` mirror for the WS `auth
 
 | Event | Behavior |
 |---|---|
-| Token near expiry (client-side timer at ~T-5min) | Client calls `/v1/session/renew`; new JWT issued, same `sub`, new `jti`, extended `exp`. |
-| Token expired, session valid | Renew succeeds. |
+| Token near expiry (client-side timer at ~T-5min) | Client calls `/v1/session/renew` with a UUID `Idempotency-Key`; a new JWT is issued with the same `sub`, new `jti`, and extended `exp`. |
+| Renewal response lost | Retry with the same key returns the same durable issuance claims. |
+| Token expired | The expired token cannot authenticate renewal; the client bootstraps a new guest. |
 | Session expired (row `expires_at` passed) or revoked | Renew returns `401`; client bootstraps a new guest. |
 
 ### 12.5 Username collision prevention
@@ -467,12 +473,13 @@ Identity is asserted only by the signed JWT `sub`. The server **never** reads a 
 
 `POST /v1/session/reset`:
 
-1. Add current `jti` to the Redis denylist (TTL = remaining life).
-2. Mark `guest_sessions.revoked_at = now()`.
+1. Persist/recover the reset command and set `guest_sessions.revoked_at = now()` in one PostgreSQL transaction.
+2. Set `jwt:revoked-session:{guestId}` in Redis through the latest possible live-token expiry (and optionally denylist the presented `jti`).
 3. Force-disconnect the guest's sockets (`server.in('guest:{id}').disconnectSockets()`).
-4. Client bootstraps a new guest via `/v1/session`. The prior anonymous identity is unrecoverable — intended.
+4. If the guest is in a game, immediately apply the explicit-abandonment result from ADR 0006.
+5. Client bootstraps a new guest via `/v1/session`. The prior anonymous identity is unrecoverable — intended.
 
-If the guest is mid-game at reset, the game transitions per the abandonment rules (§14) — a reset is treated as a voluntary departure.
+Create, renew, and reset require a UUID `Idempotency-Key` and are recorded durably in `session_commands` (ADR 0005).
 
 ### 12.10 What lives where
 
@@ -481,8 +488,9 @@ If the guest is mid-game at reset, the game transitions per the abandonment rule
 | Guest UUID (`sub`) | Presence/state keys (ephemeral) | `guest_sessions.id` (durable) |
 | Display name | `name:taken:{name}` reservation (TTL) | `guest_sessions.display_name` (+ unique CI index) |
 | Avatar key | — | `guest_sessions.avatar_key` |
-| Issued/expiry | (denylist TTL derived) | `guest_sessions.issued_at / expires_at` |
-| Revocation | `jwt:denylist:{jti}` (TTL) | `guest_sessions.revoked_at` |
+| Issued/expiry | Revocation TTL derived | `guest_sessions.issued_at / expires_at`; `session_commands` issuance claims |
+| Revocation | `jwt:revoked-session:{guestId}` plus optional `jwt:denylist:{jti}` | `guest_sessions.revoked_at` |
+| Mutation idempotency | optional hot cache | `session_commands` |
 | Connection/presence status | `presence:{guestId}` (TTL) | *not stored* (ephemeral by nature) |
 
 ### 12.11 PII minimization
@@ -501,15 +509,15 @@ We store **no** email, password, name provided by the user, IP (beyond transient
 | `mm:queued:{guestId}` | String | Guard: which queue a guest is in | 120 s (heartbeat-refreshed) |
 | `user:{guestId}:state` | String | `IDLE` \| `QUEUED` \| `RESERVED` \| `IN_GAME` | 3600 s (refreshed) |
 | `user:{guestId}:active-game` | String | `gameId` of current active game | until game end + grace |
-| `match:{matchId}:reservation` | Hash | `{white, black, gameId?, createdAt}` | 30 s |
-| `presence:{guestId}` | String | Last heartbeat marker | 45 s |
+| `match:{matchId}:reservation` | Hash | `{a,b,gameId,mode,aScore,bScore,createdAt}` | 30 s |
+| `presence:{guestId}` | Sorted set | member=`instanceId:socketId`, score=expiry epoch ms | key TTL refreshed; expired members swept |
 
 `{mode}` is a single value (`blitz`) in the MVP but keyed to support future modes/time controls without schema change.
 
 ### 13.2 Guarantees the algorithm must enforce
 
 - One guest in at most one queue (`mm:queued:{guestId}` guard + state check).
-- One guest in at most one active game (`user:{guestId}:active-game` check at enqueue).
+- One guest in at most one active game (`active_game_assignments.guest_id` primary key is the durable arbiter; the Redis active-game key is a fast guard).
 - No self-match (pair only distinct members).
 - No double assignment under concurrent matchers on different instances (atomic Lua pop-and-reserve; state `RESERVED`).
 - Atomic removal **and** reservation of both users in one script.
@@ -536,18 +544,20 @@ sequenceDiagram
     R-->>GW: {queued:true} or {error:ALREADY_QUEUED|ALREADY_IN_GAME}
     GW-->>C: queue.joined | server.error
 
-    GW->>R: EVALSHA tryMatch(mode, now)
+    Note over GW: generate UUIDv4 matchId + gameId
+    GW->>R: EVALSHA tryMatch(mode, now, matchId, gameId)
     Note over R: ZPOPMIN 2 distinct; if 2 found:<br/>set both state=RESERVED,<br/>del queued guards,<br/>HSET match reservation (TTL 30s)
-    R-->>GW: {matched:true, matchId, white, black} or {matched:false}
+    R-->>GW: {matched:true, matchId, gameId, a, b} or {matched:false}
 
     alt two players reserved
-        GW->>G: createRoom(matchId, white, black, mode)
-        G->>PG: INSERT games + 2 game_players (tx)
+        GW->>G: createRoom(matchId, gameId, a, b, mode)
+        G->>PG: INSERT/RECOVER game by UNIQUE(match_id)<br/>+ 2 players + 2 active assignments (tx)
         alt insert ok
-            G->>R: EVALSHA finalizeMatch(matchId, gameId,<br/>set both active-game, state=IN_GAME)
+            G->>R: EVALSHA finalizeMatch(matchId, gameId, a, b,<br/>verify reservation; set active-game/state)
             G-->>C: match.found {gameId, color, opponent} (both, via guest rooms)
         else insert fails
-            G->>R: EVALSHA rollbackMatch(matchId,<br/>state=IDLE, re-ZADD if still present)
+            G->>PG: confirm no game/active assignment exists
+            G->>R: EVALSHA rollbackMatch(matchId,<br/>state=IDLE, re-ZADD only if still eligible)
             G-->>C: server.error SERVICE_UNAVAILABLE (retry)
         end
     end
@@ -571,7 +581,7 @@ redis.call('SET', KEYS[3], 'QUEUED', 'EX', ARGV[4])
 return {ok='QUEUED'}
 ```
 
-**`try_match.lua`** — KEYS: `queue`, `reservation_prefix_marker`; ARGV: `mode`, `now`, `matchId`, `resTtl`
+**`try_match.lua`** — KEYS: `queue`, `reservation_prefix_marker`; ARGV: `mode`, `now`, `matchId`, `gameId`, `resTtl`
 *(state/guard keys are derived inside via redis.call with computed names; in Cluster all these keys must share a hash slot — see 13.8)*
 ```lua
 -- pop two DISTINCT oldest members
@@ -591,22 +601,30 @@ redis.call('SET', 'user:'..b..':state', 'RESERVED', 'EX', 3600)
 redis.call('DEL', 'mm:queued:'..a, 'mm:queued:'..b)
 -- randomize colors deterministically from matchId parity is NOT allowed (predictable);
 -- color is assigned by GameService using crypto RNG. Store placeholder.
-redis.call('HSET', 'match:'..ARGV[3]..':reservation', 'a', a, 'b', b, 'createdAt', ARGV[2])
-redis.call('EXPIRE', 'match:'..ARGV[3]..':reservation', tonumber(ARGV[4]))
-return {matched=true, matchId=ARGV[3], a=a, b=b}
+redis.call('HSET', 'match:'..ARGV[3]..':reservation',
+  'a', a, 'b', b, 'gameId', ARGV[4], 'mode', ARGV[1],
+  'aScore', pair[2], 'bScore', pair[4], 'createdAt', ARGV[2])
+redis.call('EXPIRE', 'match:'..ARGV[3]..':reservation', tonumber(ARGV[5]))
+return {matched=true, matchId=ARGV[3], gameId=ARGV[4], a=a, b=b}
 ```
 
-**`finalize_match.lua`** — bind gameId, set both `IN_GAME` + `active-game`, delete reservation:
+**`finalize_match.lua`** — first verify that the reservation's `gameId`, `a`, and `b` match the arguments; then set both `IN_GAME` + `active-game` and delete the reservation. A missing reservation after PostgreSQL commit is repaired from the durable game/assignments by reconciliation (ADR 0002).
 ```lua
+local reservation = 'match:'..ARGV[4]..':reservation'
+if redis.call('HGET', reservation, 'gameId') ~= ARGV[3]
+   or redis.call('HGET', reservation, 'a') ~= ARGV[1]
+   or redis.call('HGET', reservation, 'b') ~= ARGV[2] then
+  return {err='RESERVATION_MISMATCH'}
+end
 redis.call('SET', 'user:'..ARGV[1]..':state', 'IN_GAME', 'EX', 3600)
 redis.call('SET', 'user:'..ARGV[2]..':state', 'IN_GAME', 'EX', 3600)
 redis.call('SET', 'user:'..ARGV[1]..':active-game', ARGV[3])
 redis.call('SET', 'user:'..ARGV[2]..':active-game', ARGV[3])
-redis.call('DEL', 'match:'..ARGV[4]..':reservation')
+redis.call('DEL', reservation)
 return {ok=true}
 ```
 
-**`rollback_match.lua`** — reservation expired or room creation failed; return users to IDLE and re-enqueue if still connected:
+**`rollback_match.lua`** — after PostgreSQL resolves the `matchId` and each guest's active assignment, restore assigned guests to their committed game and re-enqueue only unassigned guests that are still present:
 ```lua
 local a, b = ARGV[1], ARGV[2]
 for _, u in ipairs({a, b}) do
@@ -689,14 +707,16 @@ stateDiagram-v2
 | — → `CREATED` | `finalizeMatch` from matchmaking | Server | Both users reserved | `INSERT games(status=CREATED)` | reservation exists | — | — | — |
 | `CREATED` → `WAITING_FOR_PLAYERS` | same tx | Server | 2 distinct players | `INSERT game_players` ×2, `UPDATE status` | set both `active-game`, `IN_GAME` | `match.found` to both guest rooms | 20 s join window | on timeout → `EXPIRED` |
 | `WAITING…` → `READY` | socket `join game:{id}` | Both players | membership in `game_players` | — | — | `game.snapshot` to each on join | — | — |
-| `WAITING…` → `EXPIRED` | join-window timer | Server | <2 joined | `UPDATE status=EXPIRED, termination='no_show'` | clear `active-game`, states→IDLE | `game.ended{reason:"expired"}` | — | delete room mapping |
+| `WAITING…` → `EXPIRED` | join-window timer | Server | <2 joined | `UPDATE status=EXPIRED, result=joined player win or void, termination='no_show', version+1`; delete active assignments | clear `active-game`, states→IDLE | `game.ended{reason:"no_show"}` | — | delete room mapping |
 | `READY` → `IN_PROGRESS` | `game.ready` (both) or first legal move | Server | both present | `UPDATE status=IN_PROGRESS, started_at` | — | `game.started` (colors, clocks, FEN) | move clock begins | — |
 | `IN_PROGRESS` → `IN_PROGRESS` | `move.submit` | Player on turn | full move tx (§15.4) | move tx | update snapshot cache (best-effort) | `move.accepted` to room | per-move clock | — |
-| `IN_PROGRESS` → `RECONNECTING` | socket `disconnect` | Server (presence) | player was present | — | `presence` lapses; start grace timer key | `player.disconnected` to room | grace 30 s | — |
-| `RECONNECTING` → `IN_PROGRESS` | reconnect + `game.sync` | Disconnected player | membership | — | refresh presence, clear grace | `player.reconnected` + `game.snapshot` | resume clock | — |
+| `IN_PROGRESS` → `RECONNECTING` | final guest socket `disconnect` | Server (presence) | player was present | `UPDATE status, version+1` | `presence` lapses; start grace deadline key | `player.disconnected` to room | grace 30 s; clocks continue | — |
+| `RECONNECTING` → `IN_PROGRESS` | reconnect + `game.sync` | Disconnected player | membership | `UPDATE status, version+1` | refresh presence, clear grace | `player.reconnected` + `game.snapshot` | clock already running | — |
 | `RECONNECTING` → `ABANDONED` | grace timer fires | Server | still absent | `UPDATE status=ABANDONED, result=win(opponent), termination='abandonment'` | clear active-game, states→IDLE | `game.ended{reason:"abandonment"}` | — | delete room mapping |
 | `IN_PROGRESS`/`RECONNECTING` → `COMPLETED` | mate/stalemate/draw/resign/timeout | Server (derived) or resigning player | move tx or resign/timeout check | `UPDATE status=COMPLETED, result, termination` | clear active-game, states→IDLE | `game.ended{result, reason}` | — | delete room mapping, keep game durable |
-| `IN_PROGRESS` → `ABANDONED` | both disconnect past grace | Server | both absent | `UPDATE status=ABANDONED, result=draw/void, termination='double_abandon'` | clear both active-game | `game.ended` (delivered on reconnect) | — | delete room mapping |
+| `IN_PROGRESS`/`RECONNECTING` → `ABANDONED` | both absent at grace adjudication | Server | both absent | `UPDATE status=ABANDONED, result=void, termination='double_abandon', version+1`; delete active assignments | clear both active-game | `game.ended` (delivered on reconnect) | — | delete room mapping |
+
+`games.version` starts at 0 for the allocation transaction and increments for every durable externally visible transition: ready, start, accepted move, disconnect/reconnect status, and terminal action. A terminal move increments once for the combined move/result. Ply count is independent (ADR 0006).
 
 ### 14.3 Color assignment
 
@@ -737,21 +757,43 @@ export interface GameOver {
   winner?: 'w'|'b'|null;   // null on draw
 }
 
+export interface HistoricalMove {
+  uci: string;
+}
+
+export interface EvaluateMoveInput {
+  initialFen: string;
+  history: readonly HistoricalMove[];
+  expectedCurrentFen: string;
+  move: MoveInput;
+}
+
+export interface MoveEvaluation {
+  applied: AppliedMove;
+  gameOver: GameOver;
+  pgn: string;
+}
+
+export interface ReplayedPosition {
+  fen: string;
+  turn: 'w'|'b';
+  plyCount: number;
+  pgn: string;
+  gameOver: GameOver;
+}
+
 export interface ChessEngine {
-  newGame(): { fen: string; pgn: string };
-  loadFen(fen: string): void;
-  turn(): 'w'|'b';
-  validateAndApply(fen: string, move: MoveInput): AppliedMove;   // throws IllegalMoveError
-  gameStatus(fen: string): GameOver;
-  toPgn(moves: string[]): string;
+  newGame(): ReplayedPosition;
+  replay(initialFen: string, history: readonly HistoricalMove[]): ReplayedPosition;
+  evaluateMove(input: EvaluateMoveInput): MoveEvaluation;
 }
 ```
 
-`chessjs.engine.ts` implements this with `chess.js`. The domain (`GameService`) depends only on `ChessEngine`, so replacing/upgrading `chess.js` or adding a native engine later is a one-file change.
+`chessjs.engine.ts` implements this with `chess.js`. It replays ordered persisted UCI history from `initial_fen`, verifies the replayed FEN equals `games.current_fen`, then applies/evaluates the proposal in that same historical engine instance. This is required for correct threefold-repetition detection; current FEN alone is insufficient (ADR 0004). The domain (`GameService`) depends only on `ChessEngine`, so replacing/upgrading `chess.js` or adding a native engine later is a one-file change.
 
 ### 15.2 What the backend validates (all server-side)
 
-Correct player · correct color · correct turn · legal source/destination · promotion · castling · en passant · check · checkmate · stalemate · insufficient material · threefold repetition · fifty-move rule · resignation · duplicate move (via `clientMoveId`) · stale version (via `expectedVersion`). `chess.js` supplies legality and all game-over conditions from the authoritative FEN; the server derives result/termination — the client never asserts them.
+Correct player · correct color · correct turn · legal source/destination · promotion · castling · en passant · check · checkmate · stalemate · insufficient material · threefold repetition · fifty-move rule · resignation · duplicate move (via `clientMoveId`) · stale version (via `expectedVersion`). `chess.js` supplies legality and game-over conditions from the authoritative initial position plus ordered move history; the server derives result/termination — the client never asserts them.
 
 ### 15.3 Stored representation
 
@@ -762,8 +804,9 @@ Correct player · correct color · correct turn · legal source/destination · p
 | `pgn` | `games` | Rebuilt/maintained from move SAN list; convenience for export/replay. |
 | Move list | `moves` rows | One row per ply, ordered by `ply_number`. |
 | Half/full-move counters | Encoded in FEN; `moves.ply_number` is the durable half-move index. |
-| `version` | `games` | Monotonic; +1 per accepted move. Optimistic-concurrency token. |
+| `version` | `games` | Monotonic game-state version; +1 per durable externally visible transition (a terminal move increments once). Independent of ply count. |
 | `result`, `termination` | `games` | Set once, at completion. |
+| Clock state | `games` | Remaining milliseconds plus `turn_started_at`; reconstructable after process loss. |
 
 ### 15.4 The move transaction (exact)
 
@@ -771,9 +814,12 @@ Every `move.submit` carries `clientMoveId` (UUID) and `expectedVersion` (the cli
 
 ```sql
 BEGIN;
--- 1. Read & lock the game row (serializes concurrent moves on the same game)
-SELECT id, current_fen, version, status, turn_color
-  FROM games WHERE id = $gameId FOR UPDATE;
+-- 1. Capture authoritative command time as the row-lock request is established
+WITH admitted AS MATERIALIZED (SELECT clock_timestamp() AS server_received_at)
+SELECT admitted.server_received_at, games.id, initial_fen, current_fen,
+       version, status, turn_color,
+       white_clock_ms, black_clock_ms, turn_started_at
+  FROM games, admitted WHERE games.id = $gameId FOR UPDATE OF games;
 
 -- 2a. Idempotency short-circuit: has this exact move already been accepted?
 SELECT ply_number, san, fen_after FROM moves
@@ -786,19 +832,24 @@ Then, in application code within the same tx:
 3. **Membership & turn:** verify `$guestId` ∈ `game_players` for `$gameId` and its color == `turn_color`. Else `NOT_A_PLAYER` / `NOT_YOUR_TURN` → `ROLLBACK`.
 4. **Version:** if `$expectedVersion != games.version` → `STALE_GAME_VERSION` → `ROLLBACK` (client must `game.sync`).
 5. **Status:** must be `IN_PROGRESS` (or `READY`→transition). Else reject.
-6. **Validate:** `chessEngine.validateAndApply(current_fen, move)`. On `IllegalMoveError` → `ILLEGAL_MOVE` → `ROLLBACK`.
-7. **Insert move:**
+6. **Clock:** subtract elapsed PostgreSQL time from the mover. If elapsed is greater than or equal to the remaining clock, do not insert the move; transition to timeout under ADR 0003.
+7. **History + validate:** read ordered UCI moves, replay from `initial_fen`, verify replayed FEN equals `current_fen`, and call `chessEngine.evaluateMove(...)`. On illegal proposal → `ILLEGAL_MOVE`; on history/FEN mismatch → fail closed as data corruption.
+8. **Insert move:**
 ```sql
 INSERT INTO moves (id, game_id, ply_number, client_move_id, guest_id, color,
-                   san, uci, fen_before, fen_after, created_at)
+                   san, uci, fen_before, fen_after, server_received_at, created_at)
 VALUES (...);   -- UNIQUE(game_id, client_move_id) & UNIQUE(game_id, ply_number)
 ```
    A unique violation here means a concurrent duplicate raced past step 2a → treat as idempotent success (fetch and return the winning row).
-8. **Update game + game-over check:**
+9. **Update game + game-over check:**
 ```sql
 UPDATE games
    SET current_fen = $fenAfter,
        turn_color  = $nextTurn,
+       white_clock_ms = $whiteClockAfter,
+       black_clock_ms = $blackClockAfter,
+       turn_started_at = CASE WHEN $newStatus = 'IN_PROGRESS'
+                              THEN $serverReceivedAt ELSE NULL END,
        version     = version + 1,
        status      = $newStatus,          -- IN_PROGRESS | COMPLETED
        result      = $resultOrNull,
@@ -808,16 +859,17 @@ UPDATE games
  WHERE id = $gameId AND version = $expectedVersion;   -- optimistic guard (belt & suspenders)
 -- if 0 rows updated -> ROLLBACK, STALE_GAME_VERSION
 ```
-9. `COMMIT;`
-10. **Broadcast** `move.accepted` (and `game.ended` if `gameStatus.over`) to `game:{gameId}`, carrying the **new** `version`, `san`, `fenAfter`, `clientMoveId`, `plyNumber`.
+10. If terminal, delete both `active_game_assignments` in the same transaction.
+11. `COMMIT;`
+12. **Broadcast** `move.accepted` (and `game.ended` if `gameOver.over`) to `game:{gameId}`, carrying the **new** `version`, `san`, `fenAfter`, `clientMoveId`, `plyNumber`, and clocks.
 
 **Why both the row lock and the version guard?** The `FOR UPDATE` lock serializes concurrent movers so only one proceeds at a time (§21.2). The `WHERE version = $expectedVersion` on the `UPDATE` is a second, independent guarantee that survives even if lock behavior changes, and it turns a client submitting against a stale view into a clean `STALE_GAME_VERSION` rather than a corrupt overwrite. The `UNIQUE(game_id, client_move_id)` guarantees a retried/duplicated submit can never create two rows. **Correctness never depends on Redis.**
 
 ### 15.5 Resignation, timeout, draws
 
-- **Resign:** `game.resign` from a member → server sets `COMPLETED`, `result = win(opponent)`, `termination='resignation'` in a small tx (also version-guarded, idempotent via a `resign` client id).
-- **Timeout:** clocks are tracked server-side; the per-game `timeout.scheduler` checks the mover's remaining time on each move and via a timer. Flag-fall → `COMPLETED`, `termination='timeout'`. (MVP uses one default time control; the clock model is server-authoritative.)
-- **Automatic draws:** `chess.js` reports stalemate / insufficient material / threefold / fifty-move at step 6/8; the server records the draw. Draw-by-agreement is a future extension.
+- **Resign:** `game.resign` from a member → server sets `COMPLETED`, `result = win(opponent)`, `termination='resignation'` in a small tx (version-guarded and idempotent through `game_commands.event_id`).
+- **Timeout:** clocks use persisted remaining time plus `turn_started_at`. In-process timers are advisory; every instance's periodic deadline sweep can re-adjudicate from PostgreSQL. Flag-fall → `COMPLETED`, `termination='timeout'` (ADR 0003).
+- **Automatic draws:** the history-aware `chess.js` adapter reports stalemate / insufficient material / threefold / fifty-move during replay/evaluation; the server records the draw. Draw-by-agreement is a future extension.
 
 ---
 
@@ -835,7 +887,7 @@ Single namespace `/` (default). Rooms:
 
 ### 16.3 Multiple tabs / multiple sockets
 
-A guest **may** hold multiple sockets (tabs). They all join `guest:{guestId}`. "One active game per user" is enforced at the **domain** layer via `user:{guestId}:active-game` (Redis) + `game_players` (DB), **not** by limiting sockets. Effects:
+A guest **may** hold multiple sockets (tabs). They all join `guest:{guestId}`. "One active game per user" is enforced by `active_game_assignments.guest_id` in PostgreSQL, with `user:{guestId}:active-game` as a Redis fast path, **not** by limiting sockets. Effects:
 - All tabs receive game events (they share `guest:{id}` and, once joined, `game:{gameId}`).
 - A move from *any* tab is authorized as the same guest; the move tx enforces turn/version, so two tabs can't double-move.
 - Matchmaking join from a second tab while already queued/in-game → `ALREADY_QUEUED` / `ALREADY_IN_GAME`.
@@ -846,11 +898,11 @@ On `match.found`, the client emits `game.ready`/joins; the gateway verifies memb
 
 ### 16.5 Heartbeats & stale presence
 
-Two layers: Socket.IO's built-in ping/pong (transport liveness) **and** an application `heartbeat.ping`/`heartbeat.pong` that refreshes `presence:{guestId}` (TTL 45 s) and `mm:queued` guards. Missing presence → sweeper removes stale queue entries and (if in game) the disconnect/grace path engages.
+Two layers: Socket.IO's built-in ping/pong (transport liveness) **and** an application `heartbeat.ping`/`heartbeat.pong`. Redis `presence:{guestId}` is a sorted set with one `instanceId:socketId` member per live socket and an expiry score; heartbeat advances that member, disconnect removes it, and sweeps prune expired scores. The guest becomes absent only when no unexpired member remains, so closing one tab cannot disconnect another. The final-socket transition persists `disconnected_at`/`grace_deadline_at` and refreshes queue guards as appropriate.
 
 ### 16.6 Reconnection grace
 
-On `disconnect` during a game: mark `RECONNECTING`, start a **30 s grace** timer (a Redis key `game:{id}:grace:{guestId}` with TTL + an in-process timer on the owning instance, with the Redis key as the cross-instance backstop). Reconnect within grace → `player.reconnected` + fresh `game.snapshot`, clocks resume. Grace elapsed → `ABANDONED`, opponent wins.
+On the guest's final socket `disconnect` during a game: persist `RECONNECTING` with a version increment and start a **30 s grace** deadline (a Redis key plus an in-process timer and periodic PostgreSQL-backed deadline sweep). **Clocks continue running during grace.** Reconnect within grace → persist `IN_PROGRESS` with a version increment, emit `player.reconnected`, and send a fresh `game.snapshot`. If the clock expires first, timeout wins; otherwise grace expiry → `ABANDONED`, opponent wins. If both guests are absent at adjudication, the result is `void`/`double_abandon` (ADRs 0003, 0006, and 0007).
 
 ### 16.7 Graceful shutdown & connection draining
 
@@ -882,13 +934,15 @@ Socket.IO preserves order for delivered messages but does **not** guarantee deli
 
 - **Acks:** `move.submit`, `queue.join`, `game.resign` use Socket.IO acknowledgements; the server ack carries the authoritative result (or error). No ack within timeout → client retries with the **same `clientMoveId`/`eventId`** (idempotent).
 - **Unique IDs:** every event carries `eventId`; the server tags `move.accepted` with `clientMoveId` and the new `version`.
-- **Missed-event detection:** the client tracks the last `version` it holds. If an incoming `move.accepted` has `version > lastKnown + 1`, it detected a gap → calls `game.sync`.
+- **Missed-event detection:** the client tracks the last game-state `version` it holds. If any game event has `version > lastKnown + 1`, it detected a missed move or lifecycle transition → calls `game.sync`.
 - **Full snapshot resync:** `game.sync` (WS) or `GET /v1/games/:id/snapshot` (HTTP) returns the complete authoritative state (FEN, version, move list, clocks, players, status). This is the ultimate repair for any missed/lost/duplicated event.
 - **Connection-state recovery** covers short interruptions transparently; when it **fails**, the server sends a full `game.snapshot`. Recovery is an optimization, never the sole mechanism.
 
 ---
 
 ## 17. Event protocol and JSON examples
+
+The normative field-level contract is [`docs/protocol-v1.md`](docs/protocol-v1.md) (ADR 0008). The examples below are illustrative and must conform to that document. Socket.IO event name must exactly equal envelope `type`; inbound v1 objects are strict; client timestamps are never authoritative; decoded messages are limited to 8 KiB.
 
 ### 17.1 Envelope
 
@@ -1080,16 +1134,23 @@ Ack to the submitter mirrors the same authoritative result (so the mover confirm
 |---|---|---|
 | `UNAUTHORIZED` | Missing/invalid/revoked token | Handshake or command auth. |
 | `INVALID_PAYLOAD` | Zod validation failed | Malformed envelope/payload. |
+| `UNSUPPORTED_PROTOCOL_VERSION` | Client protocol is not v1 | Wrong `protocolVersion`. |
+| `UNSUPPORTED_EVENT` | Unknown event name/type | Unsupported client command. |
+| `IDEMPOTENCY_KEY_REUSED` | Key belongs to a different command/actor | Incorrect HTTP/WS retry key reuse. |
 | `ALREADY_QUEUED` | Guest already in a queue | Duplicate `queue.join`. |
 | `ALREADY_IN_GAME` | Guest has an active game | Join while in game. |
 | `GAME_NOT_FOUND` | Unknown/expired gameId | Bad recovery request. |
+| `GAME_ALREADY_ENDED` | A competing terminal transition won | Command after terminal state. |
 | `NOT_A_PLAYER` | Guest not a member | Command on a game they're not in. |
 | `NOT_YOUR_TURN` | Wrong side to move | Out-of-turn move. |
 | `ILLEGAL_MOVE` | `chess.js` rejected | Illegal move. |
 | `STALE_GAME_VERSION` | `expectedVersion` mismatch | Client behind; must `game.sync`. |
-| `DUPLICATE_MOVE` | Same `clientMoveId` replay (informational; usually resolved idempotently) | Retry after success. |
+| `CLOCK_EXPIRED` | Move arrived at/after authoritative deadline | Timeout adjudication. |
 | `RATE_LIMITED` | Rate limit exceeded | Flooding. |
 | `SERVICE_UNAVAILABLE` | Dependency degraded / draining | Redis down, shutdown. |
+| `INTERNAL_ERROR` | Safe unexpected-failure response | Unclassified server error. |
+
+`DUPLICATE_MOVE` is an internal metric classification, not a rejection: replaying an accepted `clientMoveId` returns the original successful `move.accepted`.
 
 ---
 
@@ -1101,10 +1162,10 @@ Base path `/v1`. All request/response bodies validated by Zod. Correlation ID vi
 
 | Method & path | Auth | Request | Response | Status codes | Rate limit | Idempotency |
 |---|---|---|---|---|---|---|
-| `POST /v1/session` | none | `{}` | `{ token, guest:{ id, name, avatar, expiresAt } }` | 201, 429, 503 | 10/min/IP | `Idempotency-Key` header optional; same key → same session within TTL |
-| `POST /v1/session/renew` | Bearer JWT | `{}` | `{ token, expiresAt }` | 200, 401, 429 | 30/min/guest | Naturally idempotent (issues valid token while session live) |
+| `POST /v1/session` | none | `{}` | `{ token, guest:{ id, name, avatar, expiresAt } }` | 201/200 replay, 400, 409, 429, 503 | 10/min/IP | UUID `Idempotency-Key` required; PostgreSQL `session_commands` returns the same guest/issuance |
+| `POST /v1/session/renew` | Bearer JWT | `{}` | `{ token, expiresAt }` | 200, 400, 401, 409, 429, 503 | 30/min/guest | UUID `Idempotency-Key` required; same key → same issuance claims |
 | `GET /v1/session` | Bearer JWT | — | `{ guest:{ id, name, avatar, issuedAt, expiresAt } }` | 200, 401 | 60/min/guest | Safe/idempotent |
-| `POST /v1/session/reset` | Bearer JWT | `{}` | `{ ok: true }` | 200, 401 | 10/min/guest | Idempotent (revokes once) |
+| `POST /v1/session/reset` | Bearer JWT | `{}` | `{ ok: true }` | 200, 400, 401, 409, 503 | 10/min/guest | UUID `Idempotency-Key` required; durable command replay |
 | `GET /v1/games/active` | Bearer JWT | — | `{ gameId \| null }` | 200, 401 | 60/min/guest | Safe |
 | `GET /v1/games/:id/snapshot` | Bearer JWT | — | `game.snapshot` payload | 200, 401, 403 (`NOT_A_PLAYER`), 404 | 120/min/guest | Safe |
 | `GET /healthz` (liveness) | none | — | `{ status:"ok" }` | 200, 503 | unlimited (internal) | Safe |
@@ -1112,9 +1173,10 @@ Base path `/v1`. All request/response bodies validated by Zod. Correlation ID vi
 | `GET /metrics` | network-restricted (allowlist / mTLS / internal only) | — | Prometheus text | 200, 403 | internal | Safe |
 
 Notes:
-- **Session create idempotency:** an optional `Idempotency-Key` lets a client retry `POST /v1/session` without minting duplicate guests (server caches the result under the key in Redis, short TTL).
+- **Session mutation idempotency:** create, renew, and reset require `Idempotency-Key`; PostgreSQL `session_commands` is authoritative and Redis may only cache the result.
 - **`/metrics`** must never be publicly reachable in production — bind to an internal interface or gate at the reverse proxy.
 - **Recovery duplication is intentional and bounded:** the same authoritative snapshot is reachable via WS `game.sync` and HTTP `GET …/snapshot` because reconnection scenarios need an HTTP path before a socket exists.
+- Exact schemas, acknowledgement rules, and HTTP error mapping are normative in [`docs/protocol-v1.md`](docs/protocol-v1.md).
 
 ---
 
@@ -1144,29 +1206,32 @@ Retention: purge rows `WHERE expires_at < now() - interval '30 days' AND id NOT 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | `uuid` PK | Unguessable game id. |
+| `match_id` | `uuid` NOT NULL UNIQUE | Durable idempotency key linking the Redis reservation to exactly one game. |
 | `mode` | `text` NOT NULL default 'blitz' | Extension point. |
 | `status` | `text` NOT NULL | enum: CREATED, WAITING_FOR_PLAYERS, READY, IN_PROGRESS, RECONNECTING, COMPLETED, ABANDONED, EXPIRED. |
 | `initial_fen` | `text` NOT NULL | |
 | `current_fen` | `text` NOT NULL | Authoritative. |
 | `turn_color` | `char(1)` NOT NULL | 'w'/'b'. |
 | `pgn` | `text` NOT NULL default '' | |
-| `version` | `integer` NOT NULL default 0 | Monotonic optimistic token. |
+| `version` | `integer` NOT NULL default 0 | Monotonic game-state version; lifecycle transitions and accepted moves increment it. |
 | `result` | `text` NULL | enum: white_win, black_win, draw, void. |
 | `termination` | `text` NULL | checkmate, stalemate, insufficient_material, threefold_repetition, fifty_move, resignation, timeout, abandonment, double_abandon, no_show. |
 | `time_initial_ms` | `integer` NOT NULL | Default time control. |
 | `time_increment_ms` | `integer` NOT NULL | |
-| `white_clock_ms` | `integer` NULL | Last-known clocks (authoritative snapshot). |
-| `black_clock_ms` | `integer` NULL | |
+| `white_clock_ms` | `integer` NOT NULL | Persisted remaining clock. |
+| `black_clock_ms` | `integer` NOT NULL | Persisted remaining clock. |
+| `turn_started_at` | `timestamptz` NULL | Start of the currently running turn; NULL before start and after terminal state. |
 | `created_at` | `timestamptz` default now() | |
+| `join_deadline_at` | `timestamptz` NOT NULL | Durable no-show deadline set during allocation. |
 | `started_at` | `timestamptz` NULL | |
 | `ended_at` | `timestamptz` NULL | |
 | `updated_at` | `timestamptz` default now() | |
 
 Constraints/indexes:
-- `CHECK (turn_color IN ('w','b'))`, `CHECK (version >= 0)`.
+- `CHECK (turn_color IN ('w','b'))`, `CHECK (version >= 0)`, clock values/time control non-negative.
 - `CHECK` valid status/result combo: result NOT NULL **iff** status IN (COMPLETED, ABANDONED, EXPIRED); result must be one of the enum values; termination NOT NULL when result NOT NULL. (raw-SQL check constraint).
-- Index `(status)` partial `WHERE status IN ('IN_PROGRESS','RECONNECTING','WAITING_FOR_PLAYERS','READY')` for active-game scans.
-- Monotonic version enforced by the move tx (`version = version + 1` under row lock); no DB trigger needed, but an optional `CHECK` + trigger can reject decreases as defense-in-depth.
+- Index `(status)` partial `WHERE status IN ('IN_PROGRESS','RECONNECTING','WAITING_FOR_PLAYERS','READY')` for active-game scans; due-job indexes include `(status, join_deadline_at)` and clock fields.
+- Monotonic version enforced by every durable game transition (`version = version + 1` under row lock and optimistic guard); no DB trigger needed, but an optional trigger can reject decreases as defense-in-depth.
 
 Retention: completed games kept (small); `moves` may be archived after N months (§19.4). Ownership: `game` module.
 
@@ -1181,15 +1246,27 @@ Retention: completed games kept (small); `moves` may be archived after N months 
 | `slot` | `smallint` NOT NULL | 0 or 1. |
 | `joined_at` | `timestamptz` NULL | Room-join time. |
 | `connected` | `boolean` default false | Presence mirror (best-effort; Redis authoritative for live). |
+| `disconnected_at` | `timestamptz` NULL | Durable start of final-socket absence. |
+| `grace_deadline_at` | `timestamptz` NULL | Durable abandonment deadline; cleared on reconnect/terminal state. |
 
 Constraints (the "exactly two, unique color, unique guest" guarantees):
 - `UNIQUE(game_id, color)` — unique color per game.
 - `UNIQUE(game_id, guest_id)` — a guest can't hold two slots (also prevents self-match persisting).
 - `UNIQUE(game_id, slot)` and `CHECK (slot IN (0,1))` — at most two slots.
-- **Exactly two:** enforced by the creation transaction always inserting exactly two rows atomically; a deferred constraint/trigger can assert `count = 2` at commit (raw SQL), and `CHECK (color IN ('w','b'))`.
-- Index `(guest_id)` partial `WHERE connected` and for active-game lookups.
+- **Exactly two:** enforced by the creation transaction and an accepted deferred raw-SQL constraint trigger that asserts `count = 2` at commit for allocated games; `CHECK (color IN ('w','b'))`.
+- Index `(guest_id)` partial `WHERE connected` and an index on `(grace_deadline_at)` where non-null for due grace sweeps.
 
 Ownership: `game` module.
+
+### 19.3a `active_game_assignments`
+
+| Column | Type | Notes |
+|---|---|---|
+| `guest_id` | `uuid` PK, FK → guest_sessions(id) ON DELETE RESTRICT | One durable active assignment per guest. |
+| `game_id` | `uuid` NOT NULL, FK → games(id) ON DELETE CASCADE | Two rows may point to one game. |
+| `created_at` | `timestamptz` default now() | |
+
+Index `(game_id)`. Insert both assignments in sorted guest-ID order in the game-allocation transaction. Delete both in the same transaction as any terminal game transition. A deferred raw-SQL constraint trigger verifies that a non-terminal allocated game has exactly two assignments matching `game_players` and a terminal game has none (ADR 0001).
 
 ### 19.4 `moves`
 
@@ -1205,6 +1282,7 @@ Ownership: `game` module.
 | `uci` | `text` NOT NULL | |
 | `fen_before` | `text` NOT NULL | |
 | `fen_after` | `text` NOT NULL | |
+| `server_received_at` | `timestamptz` NOT NULL | PostgreSQL timestamp used for authoritative clock adjudication. |
 | `created_at` | `timestamptz` default now() | |
 
 Constraints/indexes (the idempotency + ordering guarantees):
@@ -1214,6 +1292,40 @@ Constraints/indexes (the idempotency + ordering guarantees):
 - `CHECK (ply_number > 0)`.
 
 Retention: keep in `moves` for active + recent games; archive/partition by month for games older than, e.g., 6 months (`moves_YYYY_MM` partitions) to bound the hot table. Ownership: `game` module.
+
+### 19.4a `session_commands`
+
+Durable idempotency for session create/renew/reset (ADR 0005).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` PK | |
+| `command_type` | `text` NOT NULL | create, renew, reset |
+| `idempotency_key_hash` | `text` NOT NULL | SHA-256 of normalized UUID header |
+| `guest_id` | `uuid` NOT NULL FK → guest_sessions(id) | Command owner/result guest |
+| `issued_jti` | `uuid` NULL | create/renew issuance |
+| `issued_at` | `timestamptz` NULL | Exact JWT claim |
+| `expires_at` | `timestamptz` NULL | Exact JWT claim |
+| `created_at` | `timestamptz` default now() | |
+
+Constraint: `UNIQUE(idempotency_key_hash)`. Reuse for another command/guest returns `IDEMPOTENCY_KEY_REUSED`.
+
+### 19.4b `game_commands`
+
+Durable idempotency for client-triggered non-move game transitions such as resignation (ADR 0006).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` PK | |
+| `game_id` | `uuid` NOT NULL FK → games(id) ON DELETE CASCADE | |
+| `guest_id` | `uuid` NOT NULL FK → guest_sessions(id) | Actor |
+| `event_id` | `uuid` NOT NULL | WS command idempotency key |
+| `command_type` | `text` NOT NULL | e.g. resign |
+| `result_version` | `integer` NOT NULL | Resulting game-state version |
+| `response` | `jsonb` NOT NULL | Compact authoritative replay response |
+| `created_at` | `timestamptz` default now() | |
+
+Constraint: `UNIQUE(game_id, event_id)`. Repeated commands return the recorded response.
 
 ### 19.5 Optional `game_events` (outbox) — justified?
 
@@ -1225,7 +1337,7 @@ Retention: keep in `moves` for active + recent games; archive/partition by month
 |---|---|
 | Models, FKs, simple unique indexes, everyday reads/writes | **Prisma** (`@unique`, `@@unique`, `@relation`). |
 | `SELECT … FOR UPDATE` in the move tx | **Prisma `$transaction` + `$queryRaw`** (Prisma has no first-class row-lock DSL). |
-| Partial unique / expression indexes, complex `CHECK` (status/result combo, exactly-two-players) | **Raw SQL migration** appended to the Prisma migration. |
+| Partial/expression indexes, complex `CHECK`, deferred active-assignment/player constraints | **Raw SQL migration** appended to the Prisma migration. |
 | Optimistic version guard (`UPDATE … WHERE version = $v`) | **Prisma `updateMany` with `where:{version}`** (returns count; 0 ⇒ conflict) or raw SQL. |
 | Generated column `display_name_ci`, partitioning of `moves` | **Raw SQL migration.** |
 
@@ -1240,11 +1352,13 @@ Every ephemeral key documented with owner and failure behavior. **Rule: losing a
 | `mm:queue:{mode}` | ZSet | member=guestId, score=enqueue ms | none (swept) | `enqueue.lua` | `try_match.lua`, sweeper | `ZREM`/`ZPOPMIN`/leave | Matchmaking pauses; no game corruption. |
 | `mm:queued:{guestId}` | String | "1" | 120 s | `enqueue.lua` | `enqueue.lua` guard | `leave.lua`, expiry | Guard lapses; sweeper reconciles. |
 | `user:{guestId}:state` | String | IDLE/QUEUED/RESERVED/IN_GAME | 3600 s | matchmaking/game | matchmaking guards | on game end/reset | If lost, DB `game_players` + `games.status` reconstruct actual state on `game.sync`. |
-| `user:{guestId}:active-game` | String | gameId | until end+grace | `finalize_match.lua` | reconnect/enqueue guard | on game end | If lost, `GET /v1/games/active` recomputes from DB (query active game for guest). |
-| `match:{matchId}:reservation` | Hash | {a,b,createdAt} | 30 s | `try_match.lua` | finalize/rollback | finalize/rollback/expiry | Expiry auto-releases stuck reservations (self-heal). |
-| `presence:{guestId}` | String | last-seen ms / instanceId | 45 s | handshake/heartbeat | sweeper, disconnect logic | expiry | Presence unknown → treated as disconnected → grace path (safe). |
+| `user:{guestId}:active-game` | String | gameId | until end+grace | `finalize_match.lua`/reconciler | reconnect/enqueue guard | on game end | If lost, `GET /v1/games/active` recomputes from `active_game_assignments`. |
+| `match:{matchId}:reservation` | Hash | {a,b,gameId,mode,aScore,bScore,createdAt} | 30 s | `try_match.lua` | finalize/rollback | finalize/rollback/expiry | PostgreSQL `games.match_id` + assignments decide whether to finalize or safely requeue. |
+| `presence:{guestId}` | ZSet | member=`instanceId:socketId`, score=expiry epoch ms | key TTL refreshed; members expire by score | handshake/heartbeat | sweeper, disconnect logic | `ZREM`/score sweep/key expiry | Guest is absent only when no unexpired socket member remains; unknown presence delays abandonment rather than guessing. |
 | `game:{gameId}:grace:{guestId}` | String | deadline ms | 30 s | disconnect handler | reconnect/abandon check | reconnect/expiry | Backstop for in-proc timer; if lost, in-proc timer still fires; if both lost, next `game.sync`/sweeper resolves. |
 | `game:{gameId}:snapshot` | String (JSON) | short-lived cached snapshot | 60 s | snapshot service | fast `game.sync` | expiry | Cache miss → rebuild from Postgres (authoritative). |
+| `jwt:revoked-session:{guestId}` | String | latest possible token expiry | bounded by live-token horizon | session reset/reconciler | HTTP/WS auth | expiry | Missing keys are rebuilt from durable `guest_sessions.revoked_at`; inability to check Redis fails new auth closed. |
+| `jwt:denylist:{jti}` | String | "1" | remaining token life | session/admin revocation | HTTP/WS auth | expiry | Optional individual-token revocation. |
 | `rl:{scope}:{id}` | String (counter) | count | window (e.g. 1–60 s) | rate limiter | rate limiter | expiry | If lost, limiter fails-open briefly (acceptable) or fails-closed per policy. |
 | Socket.IO Streams adapter keys | Streams | adapter-managed | adapter-managed | adapter | adapter | adapter trims | Degraded cross-instance fan-out; snapshot resync repairs. |
 
@@ -1253,23 +1367,25 @@ Every ephemeral key documented with owner and failure behavior. **Rule: losing a
 | Redis (ephemeral) | PostgreSQL (authoritative) |
 |---|---|
 | Matchmaking queues & membership | Created games |
-| Active-game lookup cache | Player assignments (`game_players`) |
+| Active-game lookup cache | Historical players (`game_players`) + current claims (`active_game_assignments`) |
 | Presence & heartbeat expiry | Accepted moves (`moves`) |
 | Match reservations | Durable game version |
 | Short-lived snapshot cache | Completed results & termination |
-| Rate-limit counters | Recovery after process failure |
+| Rate-limit counters and revocation lookup | Durable revocation + recovery after process failure |
 | Short reconnection/grace state | — |
 | Socket.IO Streams adapter | — |
 
 ### 20.2 Startup reconciliation & cleanup
 
-On boot and via a periodic **reconciler job** (one leader-elected instance, or all instances with idempotent operations):
+On boot and via periodic **leaderless idempotent jobs on every instance** (ADR 0007):
 
 1. **Stale queue entries:** for each member of `mm:queue:*`, if `presence:{id}` absent or entry older than max-wait → `ZREM` and, if the guest has a live socket, notify `queue.left{reason:"stale"}`.
-2. **Stale reservations:** `match:*:reservation` older than TTL are already auto-expired; the reconciler also finds guests stuck in `RESERVED` with no `active-game` and no live reservation → reset to `IDLE`.
+2. **Stale reservations/allocations:** use `games.match_id` and `active_game_assignments` to finalize Redis for committed games. Reset/requeue `RESERVED` guests only after PostgreSQL proves no game/assignment exists.
 3. **Presence keys:** naturally expire; the reconciler force-clears presence for guests with no sockets on any instance (cross-checked via adapter).
-4. **Active-game drift:** for each `user:{id}:active-game`, verify the game is still non-terminal in Postgres; if the game is `COMPLETED/ABANDONED/EXPIRED`, clear the key. Conversely, for guests with a live socket but missing `active-game`, recompute from Postgres.
-5. **Room mappings:** on instance restart, in-memory room membership is empty; it is rebuilt lazily as clients reconnect and re-`join`. The Redis adapter tracks cross-instance rooms; no manual rebuild needed.
+4. **Active-game drift:** compare Redis active-game keys with `active_game_assignments`; clear terminal/stale values and restore missing values.
+5. **Due transitions:** bounded PostgreSQL sweeps adjudicate join deadlines, clock deadlines, and disconnect grace under row lock/version guards. In-process timers are latency optimizations only.
+6. **Revocation drift:** rebuild `jwt:revoked-session:*` for durably revoked sessions with a possible live-token horizon.
+7. **Room mappings:** on instance restart, in-memory room membership is empty; it is rebuilt lazily as clients reconnect and re-`join`. The Redis adapter tracks cross-instance rooms; no manual rebuild needed.
 
 **Room-exists-in-PG-but-not-Redis:** Postgres is authoritative — the game continues; Redis coordination keys are re-created on the next relevant action (`game.sync` repopulates snapshot cache, active-game, presence). This is the normal post-restart path (§23).
 
@@ -1277,11 +1393,13 @@ On boot and via a periodic **reconciler job** (one leader-elected instance, or a
 
 ## 21. Concurrency and idempotency
 
-### 21.1 The three correctness pillars
+### 21.1 Correctness pillars
 
 1. **`UNIQUE(game_id, client_move_id)`** — a duplicated/retried `move.submit` can never insert two move rows. Idempotent replay returns the original result.
-2. **Monotonic `version` + optimistic guard** — a move computed against a stale view is rejected (`STALE_GAME_VERSION`); the client re-syncs. `version` only ever increases.
+2. **Monotonic game-state `version` + optimistic guard** — a command computed against a stale view is rejected (`STALE_GAME_VERSION`); the client re-syncs. `version` increases for every durable externally visible game transition.
 3. **Row lock (`SELECT … FOR UPDATE`)** — serializes concurrent movers on the same game so validation runs against a consistent, exclusive view.
+4. **`active_game_assignments.guest_id` primary key** — PostgreSQL rejects assigning one guest to two active games.
+5. **`games.match_id` unique constraint** — a Redis reservation can create/recover only one durable game.
 
 None of these depend on Redis (principle 7).
 
@@ -1297,16 +1415,17 @@ No path yields two persisted moves or an out-of-turn acceptance.
 
 - Repeated `queue.join` → `mm:queued` guard → `ALREADY_QUEUED` (no duplicate ZSet entry; the member already exists with its original score, preserving FIFO).
 - `try_match` is atomic (Lua) — a member is `ZPOPMIN`-ed exactly once across all instances.
-- `finalize`/`rollback` are idempotent (`SET`/`DEL` are).
-- Reservation TTL guarantees no permanent double-hold.
+- `finalize` verifies reservation members/game ID; rollback occurs only after PostgreSQL proves no game/assignment exists.
+- Reservation TTL plus reconciliation guarantees no permanent double-hold.
+- `games.match_id` makes commit-before-finalize recovery idempotent.
 
 ### 21.4 Session creation idempotency
 
-`POST /v1/session` with an `Idempotency-Key` returns the same guest for retries within the key TTL (Redis-cached). Name reservation uses `SET NX` + DB unique index so two concurrent creates can't grab one name.
+Session create, renew, and reset require `Idempotency-Key`. `session_commands` stores the durable outcome so retries survive Redis loss and return the same guest/issuance/result. Name reservation uses `SET NX` + DB unique index so two concurrent creates cannot claim one name.
 
 ### 21.5 Broadcast idempotency
 
-`move.accepted` carries `version` + `clientMoveId`; clients dedupe by `version`/`eventId`. A doubly-delivered broadcast is a no-op on the client. A missed one is detected by a version gap → `game.sync`.
+Every game event carries the game-state `version`; `move.accepted` also carries `clientMoveId`. Clients dedupe by `eventId` and state version. A doubly delivered event is a no-op. A missed move or lifecycle transition is detected by a version gap → `game.sync`.
 
 ---
 
@@ -1381,8 +1500,8 @@ Each scenario: **authoritative recovery source** and **user-visible result**.
 | Scenario | Recovery source | Mechanism | User-visible result |
 |---|---|---|---|
 | Disconnect while queued | Redis presence + sweeper | Presence TTL lapses / immediate `disconnect` handler `ZREM`s | Silently removed from queue; on reconnect must re-join. |
-| Disconnect during a game | Postgres (game) + presence/grace | `RECONNECTING`, 30 s grace, `player.disconnected` to opponent | Opponent sees "opponent disconnected"; game paused; auto-resume or win on timeout. |
-| Both users disconnect | Postgres + double-grace | Both graces elapse → `ABANDONED` | On reconnect, both get `game.ended{reason:"abandonment"}` (or draw/void per policy). |
+| Disconnect during a game | Postgres (game/clock) + presence/grace | `RECONNECTING`, 30 s grace, clocks continue, `player.disconnected` to opponent | Opponent sees "opponent disconnected"; reconnect, timeout, or abandonment resolves deterministically. |
+| Both users disconnect | Postgres + presence/grace | First valid grace adjudication observing both absent → `ABANDONED`, `void`, `double_abandon` | On reconnect, both get the terminal snapshot/event. |
 | Reconnect to another replica | Postgres (+ shared Redis) | New socket, `game.sync` → snapshot from DB; adapter re-joins room | Seamless resume; board fully restored. |
 | Browser refresh | Postgres + token in storage | Token reloaded → reconnect → `GET /games/active` + `game.sync` | Same game restored; no data loss. |
 | Duplicate `move.submit` | Postgres unique constraint | `UNIQUE(game_id, client_move_id)` idempotency short-circuit | Exactly one move applied; retried submit returns the same `move.accepted`. |
@@ -1552,7 +1671,7 @@ Integration tests use **Testcontainers** (real Postgres + Redis) so constraint a
 
 ### 26.3 Post-run correctness audit (automated)
 
-SQL assertions run after each load test: no duplicate `client_move_id` per game, no ply gaps/dupes, every completed game has exactly two players with distinct colors, version equals `max(ply_number)`.
+SQL assertions run after each load test: no duplicate `client_move_id` per game, no ply gaps/dupes, every allocated game has exactly two historical players with distinct colors, no guest has multiple active assignments, every active game has exactly two assignments, every terminal game has none, and game versions are monotonic. Version is not compared with ply because lifecycle transitions also increment it (ADR 0006).
 
 ---
 
@@ -1560,7 +1679,7 @@ SQL assertions run after each load test: no duplicate `client_move_id` per game,
 
 ### 27.1 Local (Docker Compose)
 
-Services: `app` (NestJS, `--watch`), `postgres:16`, `redis:7`, optional `nginx` for WSS emulation. `.env.example` documents all config (JWT keys, DB/Redis URLs, allowlist, TTLs, time control). Prisma migrations run on startup in dev.
+The zero-touch local contract is `docker compose up --build` (see [`docs/configuration.md`](docs/configuration.md)). Services: `app` (NestJS, `--watch`), `postgres:16`, `redis:7`, a one-shot Ed25519 `keygen`, and a one-shot development migration service; optional Docker profiles add Nginx, an OTel collector, and Prometheus. Compose supplies safe local defaults and generated keys through a named volume, so no developer manually installs a dependency or edits required environment files. Production migrations never run on app boot.
 
 ### 27.2 Production (Phase 1)
 
@@ -1578,11 +1697,13 @@ Services: `app` (NestJS, `--watch`), `postgres:16`, `redis:7`, optional `nginx` 
 
 ### 27.4 Config surface (env)
 
-`NODE_ENV`, `PORT`, `DATABASE_URL`, `REDIS_URL`, `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY`/`JWT_KID`, `JWT_TTL`, `ORIGIN_ALLOWLIST`, `TIME_INITIAL_MS`, `TIME_INCREMENT_MS`, `GRACE_MS`, `RESERVATION_TTL_MS`, `MAX_WS_BUFFER_BYTES`, rate-limit knobs, `OTEL_EXPORTER_OTLP_ENDPOINT`.
+The complete validated matrix is normative in [`docs/configuration.md`](docs/configuration.md). Key settings include `NODE_ENV`, `PORT`, `DATABASE_URL`, `REDIS_URL`, `JWT_PRIVATE_KEY_FILE`, `JWT_PUBLIC_KEYS_DIR`, `JWT_KID`, `JWT_TTL_SECONDS`, `ORIGIN_ALLOWLIST`, clock/grace/reservation/presence TTLs, `MAX_WS_BUFFER_BYTES`, background-job cadences, rate-limit knobs, and `OTEL_EXPORTER_OTLP_ENDPOINT`. Private key values are never placed directly in environment variables.
 
 ---
 
 ## 28. Phased implementation roadmap
+
+This original high-level roadmap is retained for architectural context. The executable, gated delivery sequence is [`PLAN.md`](PLAN.md), whose Phase 0–13 numbering is authoritative for implementation and phase checkpoints.
 
 | Phase | Deliverables | Exit criteria |
 |---|---|---|
@@ -1603,10 +1724,10 @@ Services: `app` (NestJS, `--watch`), `postgres:16`, `redis:7`, optional `nginx` 
 | Risk / trade-off | Decision & mitigation |
 |---|---|
 | **Sticky sessions vs. even load** | Stickiness can skew load across instances. Accepted for Socket.IO correctness; mitigate with connection-count autoscaling and forced-websocket transport to minimize polling. |
-| **JWT revocation lag** | JWTs are stateless; mitigated by short TTL + Redis `jti` denylist for instant logout. |
+| **JWT revocation lag** | JWTs are stateless; mitigated by short TTL, a Redis session-wide revocation key, optional per-`jti` denylist, durable `revoked_at`, and revocation-key reconciliation. New auth fails closed if Redis cannot be checked. |
 | **Redis single point (MVP)** | One Redis node is a SPOF for matchmaking. Games survive Redis loss (Postgres authoritative); add replica/Sentinel in Phase 2. |
 | **Optimistic concurrency retries** | Under bursty double-submits, clients may see `STALE_GAME_VERSION` and resync. Acceptable; correctness preserved; monitor `optimistic_conflicts_total`. |
-| **In-memory clocks** | Server-authoritative clocks live in process + `games` snapshot; a crash mid-move could lose sub-second clock precision. Mitigate by persisting clock snapshots on each move and reconciling on `game.sync`. |
+| **Clock scheduler loss/duplication** | Remaining time plus `turn_started_at` and move adjudication time are durable. In-process timers are advisory; leaderless PostgreSQL-backed deadline sweeps re-adjudicate under a row lock/version guard (ADR 0003). |
 | **`chess.js` as rules authority** | Depends on library correctness; mitigated by the `ChessEngine` seam (swap/upgrade) and a strong adapter test suite. |
 | **Modular monolith limits** | At very large scale a single process per instance is a ceiling; horizontal replicas defer this well past MVP. Extract a dedicated WS layer (à la lila-ws) only if profiling demands — designed for, not built. |
 | **No outbox** | Broadcast is best-effort; mitigated by snapshot resync as the durable recovery path. Add outbox only when external durable side-effects appear. |
@@ -1633,14 +1754,29 @@ Designed as seams today, deliberately unbuilt:
 
 1. **Modular monolith on NestJS**, single Socket.IO namespace; no microservices, no external message broker for MVP.
 2. **PostgreSQL is the sole source of truth**; Redis is strictly ephemeral coordination.
-3. **Guest identity = short-lived EdDSA JWT** backed by a `guest_sessions` row and a Redis `jti` denylist for instant revocation.
-4. **Matchmaking = Redis sorted set + atomic Lua** (enqueue / try-match / finalize / rollback) with a reservation TTL; single-node Redis for MVP, `{mm}` hash-tag path for Cluster.
-5. **Move correctness = row lock + monotonic `version` + `UNIQUE(game_id, client_move_id)`**; commit **then** broadcast.
+3. **Guest identity = short-lived EdDSA JWT** backed by a `guest_sessions` row, durable session-command idempotency, a Redis session-wide revocation key, and optional per-`jti` denylist.
+4. **Matchmaking = Redis sorted set + atomic Lua**, while `UNIQUE(games.match_id)` and PostgreSQL `active_game_assignments` make allocation crash-safe and prevent a guest from owning two active games.
+5. **Game correctness = row lock + monotonic game-state `version` + command/move idempotency constraints**; commit **then** broadcast.
 6. **`chess.js` behind a `ChessEngine` interface**; domain never imports the library.
 7. **Application-level reliability** (acks, `clientMoveId`, versions, snapshot resync) layered over Socket.IO's at-most-once delivery; connection-state recovery is an optimization only.
 8. **Reconnection always resolves to an authoritative snapshot** from Postgres (WS `game.sync` or HTTP `GET …/snapshot`).
 9. **Redis Streams adapter** wired from day one so 1 → N scaling needs no code change; sticky sessions at the LB.
 10. **Server-authoritative throughout**; client IDs/colors/results are never trusted; room membership is never authorization.
+
+### 31.1 Phase 0 implementation clarifications
+
+Accepted ADRs close the implementation-sensitive gaps:
+
+1. [`ADR 0001`](docs/adr/0001-postgresql-active-game-assignments.md): `active_game_assignments.guest_id` is the PostgreSQL one-active-game guarantee.
+2. [`ADR 0002`](docs/adr/0002-idempotent-match-allocation.md): pre-generated `matchId`/`gameId` plus `UNIQUE(games.match_id)` close the commit-before-Redis-finalize crash window.
+3. [`ADR 0003`](docs/adr/0003-durable-server-clocks.md): clocks persist remaining time and `turn_started_at`; disconnect does not pause them; timers are advisory.
+4. [`ADR 0004`](docs/adr/0004-history-aware-chess-engine.md): engine evaluation replays ordered history, which makes threefold repetition correct.
+5. [`ADR 0005`](docs/adr/0005-session-token-lifecycle.md): session mutations require durable idempotency keys; reset revokes the entire anonymous session.
+6. [`ADR 0006`](docs/adr/0006-game-transitions-and-terminal-races.md): all no-show, timeout, disconnect, reset, and terminal race outcomes and version rules are frozen.
+7. [`ADR 0007`](docs/adr/0007-leaderless-background-jobs.md): every instance runs bounded idempotent jobs; no leader is required for correctness.
+8. [`ADR 0008`](docs/adr/0008-versioned-protocol-and-acknowledgements.md): [`docs/protocol-v1.md`](docs/protocol-v1.md) is the strict normative transport contract.
+
+Local implementation follows the zero-touch Docker/configuration contract in [`docs/configuration.md`](docs/configuration.md).
 
 ---
 
@@ -1737,15 +1873,19 @@ sequenceDiagram
     else new move
         G->>G: check membership + turn + status
         G->>G: check expectedVersion == version
-        G->>CE: validateAndApply(current_fen, move)
+        G->>PG: SELECT ordered UCI history + authoritative clock timestamp
+        G->>CE: evaluateMove(initial_fen, history, current_fen, move)
         alt illegal
             CE-->>G: IllegalMoveError
             G->>PG: ROLLBACK
             G-->>GW: move.rejected {ILLEGAL_MOVE, authoritativeVersion}
         else legal
-            CE-->>G: AppliedMove {san, fenAfter, over?}
+            CE-->>G: MoveEvaluation {applied, gameOver, pgn}
             G->>PG: INSERT moves (UNIQUE game_id,client_move_id / ply)
-            G->>PG: UPDATE games SET fen,turn,version+1,status,result WHERE version=expectedVersion
+            G->>PG: UPDATE games SET fen,turn,clocks,turn_started_at,<br/>version+1,status,result WHERE version=expectedVersion
+            opt terminal move
+                G->>PG: DELETE active_game_assignments for game
+            end
             G->>PG: COMMIT
             G-->>GW: ack move.accepted {new version}
             G->>B: emit move.accepted (+ game.ended if over) to game:{id}
@@ -1783,4 +1923,4 @@ Official documentation and architectural evidence used to ground this design.
 
 ---
 
-*End of Architecture.md — v1.0. This is a design proposal; no implementation has begun. Await approval before backend implementation.*
+*End of Architecture.md — v1.1. Phase 0 architecture decisions are approved; implementation proceeds through `PLAN.md`.*
