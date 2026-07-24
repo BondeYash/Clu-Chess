@@ -9,6 +9,10 @@ describe('application configuration', () => {
     const environment = parseEnvironment({});
 
     expect(environment.PORT).toBe(3000);
+    expect(environment.SESSION_COOKIE_ENABLED).toBe(true);
+    expect(environment.SESSION_COOKIE_NAME).toBe('cluchess_guest');
+    expect(environment.SESSION_RETENTION_DAYS).toBe(30);
+    expect(environment.RL_SESSION_GET_LIMIT).toBe(60);
     expect(environment.TIME_INITIAL_MS).toBe(300_000);
     expect(Object.isFrozen(environment)).toBe(true);
   });
@@ -17,10 +21,12 @@ describe('application configuration', () => {
     const environment = parseEnvironment({
       METRICS_ENABLED: 'false',
       PORT: '4000',
+      SESSION_COOKIE_ENABLED: 'false',
     });
 
     expect(environment.METRICS_ENABLED).toBe(false);
     expect(environment.PORT).toBe(4000);
+    expect(environment.SESSION_COOKIE_ENABLED).toBe(false);
   });
 
   it('rejects invalid production origins without echoing secrets', () => {

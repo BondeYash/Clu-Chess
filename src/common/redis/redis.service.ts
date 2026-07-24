@@ -30,13 +30,20 @@ export class RedisService implements OnApplicationShutdown {
     return this.client;
   }
 
+  async ensureConnected(): Promise<void> {
+    if (this.client.status === 'wait') {
+      await this.client.connect();
+    }
+    if (this.client.status !== 'ready') {
+      throw new Error('Redis is unavailable');
+    }
+  }
+
   async check(): Promise<DependencyCheck> {
     const startedAt = performance.now();
 
     try {
-      if (this.client.status === 'wait') {
-        await this.client.connect();
-      }
+      await this.ensureConnected();
       await this.client.ping();
       return {
         latencyMs: Math.round(performance.now() - startedAt),

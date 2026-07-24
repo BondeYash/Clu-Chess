@@ -384,62 +384,68 @@ Implement a low-PII anonymous identity that survives refresh, authenticates REST
 
 #### Identity
 
-- [ ] Add curated adjective/noun catalogs and the avatar catalog.
-- [ ] Implement normalized profanity checks, including approved leetspeak normalization.
-- [ ] Generate `Adjective + Noun + digits` names using cryptographic randomness.
-- [ ] Reserve candidate names with Redis `SET NX` as a fast path.
-- [ ] Treat the PostgreSQL case-insensitive unique constraint as final authority and retry bounded collisions.
-- [ ] Add the longer random-suffix fallback.
-- [ ] Store and return avatar keys; never proxy image bytes through the API.
+- [x] Add curated adjective/noun catalogs and the avatar catalog.
+- [x] Implement normalized profanity checks, including approved leetspeak normalization.
+- [x] Generate `Adjective + Noun + digits` names using cryptographic randomness.
+- [x] Reserve candidate names with Redis `SET NX` as a fast path.
+- [x] Treat the PostgreSQL case-insensitive unique constraint as final authority and retry bounded collisions.
+- [x] Add the longer random-suffix fallback.
+- [x] Store and return avatar keys; never proxy image bytes through the API.
 
 #### Token service
 
-- [ ] Load Ed25519 keys securely and support `kid`.
-- [ ] Issue JWTs with the exact approved claims and 12-hour default TTL.
-- [ ] Verify signature, algorithm, `kid`, version, `iat`, `exp`, and claim shape.
-- [ ] Implement the approved `jti` rotation and revocation behavior.
-- [ ] Never log raw tokens, authorization headers, private keys, or complete `jti` values.
+- [x] Load Ed25519 keys securely and support `kid`.
+- [x] Issue JWTs with the exact approved claims and 12-hour default TTL.
+- [x] Verify signature, algorithm, `kid`, version, `iat`, `exp`, and claim shape.
+- [x] Implement the approved `jti` rotation and revocation behavior.
+- [x] Never log raw tokens, authorization headers, private keys, or complete `jti` values.
 
 #### REST endpoints
 
-- [ ] `POST /v1/session`
+- [x] `POST /v1/session`
   - create the guest and token;
   - require UUID `Idempotency-Key`;
   - persist/replay the same result through `session_commands`;
   - set the approved secure cookie if cookie delivery is enabled.
-- [ ] `POST /v1/session/renew`
+- [x] `POST /v1/session/renew`
   - authenticate the current session;
   - require UUID `Idempotency-Key`;
   - apply the approved rotation policy;
   - return an idempotent result for a retried renewal.
-- [ ] `GET /v1/session`
+- [x] `GET /v1/session`
   - return only the approved public guest/session fields.
-- [ ] `POST /v1/session/reset`
+- [x] `POST /v1/session/reset`
   - require UUID `Idempotency-Key`;
   - revoke the session;
   - add session-wide revocation and optional per-token denylist state;
   - expose a port for disconnecting all guest sockets once realtime is present;
   - treat a repeated reset as idempotent.
-- [ ] Apply Zod request/response validation and endpoint-specific rate limits.
+- [x] Apply Zod request/response validation and endpoint-specific rate limits.
 
 #### Cleanup
 
-- [ ] Implement expired-session cleanup without deleting guest rows still referenced by retained games.
-- [ ] Document data retention and verify that no persistent IP/device fingerprint is added.
+- [x] Implement expired-session cleanup without deleting guest rows still referenced by retained games.
+- [x] Document data retention and verify that no persistent IP/device fingerprint is added.
 
 ### Verification
 
-- [ ] Unit tests cover name format, profanity normalization, catalog safety, avatar selection, collision retry, and fallback.
-- [ ] Integration tests cover concurrent name collision and database uniqueness.
-- [ ] JWT tests cover expiry, wrong algorithm, unknown `kid`, malformed claims, rotation, revocation, and key overlap.
-- [ ] REST tests cover all success, validation, authentication, rate-limit, Redis-failure, and PostgreSQL-failure paths.
-- [ ] Session creation and renewal meet the latency target under normal local load.
+- [x] Unit tests cover name format, profanity normalization, catalog safety, avatar selection, collision retry, and fallback.
+- [x] Integration tests cover concurrent name collision and database uniqueness.
+- [x] JWT tests cover expiry, wrong algorithm, unknown `kid`, malformed claims, rotation, revocation, and key overlap.
+- [x] REST tests cover all success, validation, authentication, rate-limit, Redis-failure, and PostgreSQL-failure paths.
+- [x] Session creation and renewal meet the latency target under normal local load.
 
 ### Exit criteria
 
 - FR-1 and FR-2 are complete.
 - The token verifier is ready to be reused by Socket.IO middleware.
 - Reset/revocation semantics are deterministic during dependency degradation.
+
+> **Result:** Passed locally with strict type/lint/build gates, 34 unit tests,
+> the complete Dockerized integration suite, 86%+ unit line coverage, durable
+> replay under concurrent and Redis-cold retries, fail-closed Redis and
+> PostgreSQL outage checks, retention safety, revocation rebuilding, and local
+> p95 create/renew latency at or below 150 ms.
 
 ---
 

@@ -49,6 +49,12 @@ const environmentSchema = z
     JWT_KID: z.string().min(1).max(128).default('local-dev-1'),
     JWT_TTL_SECONDS: duration(43_200),
     JWT_CLOCK_SKEW_SECONDS: duration(30, 0),
+    SESSION_COOKIE_ENABLED: booleanFromString(true),
+    SESSION_COOKIE_NAME: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]+$/)
+      .default('cluchess_guest'),
+    SESSION_RETENTION_DAYS: count(30),
     ORIGIN_ALLOWLIST: z.string().min(1).default('http://localhost:5173'),
     TIME_INITIAL_MS: duration(300_000),
     TIME_INCREMENT_MS: duration(2000, 0),
@@ -81,6 +87,8 @@ const environmentSchema = z
     RL_SESSION_RENEW_WINDOW_MS: duration(60_000),
     RL_SESSION_RESET_LIMIT: count(10),
     RL_SESSION_RESET_WINDOW_MS: duration(60_000),
+    RL_SESSION_GET_LIMIT: count(60),
+    RL_SESSION_GET_WINDOW_MS: duration(60_000),
     RL_QUEUE_LIMIT: count(5),
     RL_QUEUE_WINDOW_MS: duration(10_000),
     RL_MOVE_LIMIT: count(10),

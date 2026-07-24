@@ -30,6 +30,8 @@ import { validCorrelationId } from './correlation-id.middleware.js';
             paths: [
               'req.headers.authorization',
               'req.headers.cookie',
+              'req.remoteAddress',
+              'req.remotePort',
               'res.headers.set-cookie',
               'token',
               '*.token',

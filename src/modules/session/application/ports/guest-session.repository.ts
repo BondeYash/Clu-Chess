@@ -18,6 +18,7 @@ export type IssuedSessionClaims = Readonly<{
 export type CreateGuestSession = Readonly<{
   avatarKey: string;
   displayName: string;
+  guestSessionId: string;
   idempotencyHash: string;
   issuedClaims: IssuedSessionClaims;
 }>;
@@ -28,17 +29,41 @@ export type RenewGuestSession = Readonly<{
   issuedClaims: IssuedSessionClaims;
 }>;
 
+export type ResetGuestSession = Readonly<{
+  guestSessionId: string;
+  idempotencyHash: string;
+  revokedAt: Date;
+}>;
+
 export type SessionCommandReplay = Readonly<{
   commandType: 'CREATE' | 'RENEW' | 'RESET';
   guestSession: GuestSessionRecord;
   issuedClaims: IssuedSessionClaims | null;
 }>;
 
+export type SessionMutationResult = Readonly<{
+  replayed: boolean;
+  value: SessionCommandReplay;
+}>;
+
+export type RevokedSessionCursor = Readonly<{
+  id: string;
+  revokedAt: Date;
+}>;
+
+export const GUEST_SESSION_REPOSITORY = Symbol('GUEST_SESSION_REPOSITORY');
+
 export interface GuestSessionRepository {
-  create(input: CreateGuestSession): Promise<SessionCommandReplay>;
+  cleanupExpired(cutoff: Date, limit: number): Promise<number>;
+  create(input: CreateGuestSession): Promise<SessionMutationResult>;
   findByDisplayName(displayName: string): Promise<GuestSessionRecord | null>;
   findById(id: string): Promise<GuestSessionRecord | null>;
   findCommand(idempotencyHash: string): Promise<SessionCommandReplay | null>;
-  renew(input: RenewGuestSession): Promise<SessionCommandReplay>;
-  revoke(guestSessionId: string, revokedAt: Date): Promise<boolean>;
+  findLiveRevoked(
+    now: Date,
+    limit: number,
+    cursor?: RevokedSessionCursor,
+  ): Promise<readonly GuestSessionRecord[]>;
+  renew(input: RenewGuestSession): Promise<SessionMutationResult>;
+  reset(input: ResetGuestSession): Promise<SessionMutationResult>;
 }

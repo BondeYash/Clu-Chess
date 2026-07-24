@@ -17,6 +17,7 @@ export class DatabaseError extends Error {
 interface ErrorWithCode {
   code?: unknown;
   cause?: unknown;
+  message?: unknown;
 }
 
 const RETRYABLE_CODES = new Set(['40001', '40P01', '55P03', '57014', 'P2034']);
@@ -37,6 +38,14 @@ const UNAVAILABLE_CODES = new Set([
   '08006',
   '08007',
   '08P01',
+  '57P01',
+  '57P02',
+  '57P03',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ENOTFOUND',
+  'EPIPE',
+  'ETIMEDOUT',
   'P1000',
   'P1001',
   'P1002',
@@ -63,6 +72,17 @@ function readCode(error: unknown): string | undefined {
   return readCode(candidate.cause);
 }
 
+function readMessage(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null) {
+    return undefined;
+  }
+  const candidate = error as ErrorWithCode;
+  if (typeof candidate.message === 'string') {
+    return candidate.message;
+  }
+  return readMessage(candidate.cause);
+}
+
 export function toDatabaseError(error: unknown): DatabaseError {
   if (error instanceof DatabaseError) {
     return error;
@@ -80,6 +100,9 @@ export function toDatabaseError(error: unknown): DatabaseError {
   }
   if (
     (code !== undefined && UNAVAILABLE_CODES.has(code)) ||
+    /query read timeout|connection (?:terminated|closed unexpectedly)/i.test(
+      readMessage(error) ?? '',
+    ) ||
     error instanceof Prisma.PrismaClientInitializationError
   ) {
     return new DatabaseError('unavailable', true, { cause: error });

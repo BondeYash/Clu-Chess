@@ -20,6 +20,7 @@ function createClientOptions(
     idleTimeoutMillis: 30_000,
     max: config.values.DATABASE_POOL_MAX,
     options: `-c timezone=UTC -c statement_timeout=${String(timeoutMs)}`,
+    query_timeout: timeoutMs,
   });
   const adapter = new PrismaPg(pool, {
     disposeExternalPool: true,

@@ -8,6 +8,7 @@
 | [`protocol-v1.md`](protocol-v1.md)                 | Normative REST and Socket.IO v1 contract           |
 | [`configuration.md`](configuration.md)             | Zero-touch Docker and typed configuration contract |
 | [`database-operations.md`](database-operations.md) | Roles, migrations, rollback, backup, and restore   |
+| [`session-operations.md`](session-operations.md)   | Guest tokens, revocation, rotation, and retention  |
 
 ## Phase status
 
@@ -16,5 +17,6 @@
 | Phase 0 — Architecture closure and contracts | Complete |
 | Phase 1 — Repository and runtime foundation  | Complete |
 | Phase 2 — Durable persistence foundation     | Complete |
+| Phase 3 — Anonymous identity and sessions    | Complete |
 
 Later phase documents and operational runbooks will be added here as they are completed.

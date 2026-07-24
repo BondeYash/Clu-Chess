@@ -13,6 +13,8 @@ const executeFile = promisify(execFile);
 declare module 'vitest' {
   export interface ProvidedContext {
     databaseUrl: string;
+    postgresContainerId: string;
+    redisContainerId: string;
     redisUrl: string;
   }
 }
@@ -55,6 +57,8 @@ export default async function setup(
     const redisUrl = connectionUrl(redis);
     await deployMigrations(databaseUrl);
     project.provide('databaseUrl', databaseUrl);
+    project.provide('postgresContainerId', postgres.getId());
+    project.provide('redisContainerId', redis.getId());
     project.provide('redisUrl', redisUrl);
   } catch (error) {
     await Promise.all([postgres.stop(), redis.stop()]);

@@ -62,8 +62,11 @@ All duration values use explicit millisecond or second suffixes. Startup validat
 | `JWT_PRIVATE_KEY_FILE`        | generated volume path      | generated test key path   | required mounted secret     |
 | `JWT_PUBLIC_KEYS_DIR`         | generated volume directory | generated test directory  | required mounted key set    |
 | `JWT_KID`                     | `local-dev-1`              | `test-1`                  | required unique key ID      |
-| `JWT_TTL_SECONDS`             | `43200`                    | `3600`                    | default `43200`             |
-| `JWT_CLOCK_SKEW_SECONDS`      | `30`                       | `0`                       | default `30`                |
+| `JWT_TTL_SECONDS`             | `43200`                    | `43200`                   | default `43200`             |
+| `JWT_CLOCK_SKEW_SECONDS`      | `30`                       | `30`                      | default `30`                |
+| `SESSION_COOKIE_ENABLED`      | `true`                     | `true`                    | policy supplied             |
+| `SESSION_COOKIE_NAME`         | `cluchess_guest`           | `cluchess_guest`          | stable non-secret name      |
+| `SESSION_RETENTION_DAYS`      | `30`                       | `30`                      | minimum `1`                 |
 | `ORIGIN_ALLOWLIST`            | `http://localhost:5173`    | test origin               | required HTTPS origins      |
 | `TIME_INITIAL_MS`             | `300000`                   | scenario supplied         | default `300000`            |
 | `TIME_INCREMENT_MS`           | `2000`                     | scenario supplied         | default `2000`              |
@@ -94,6 +97,8 @@ All duration values use explicit millisecond or second suffixes. Startup validat
 | `RL_SESSION_RENEW_WINDOW_MS`  | `60000` |
 | `RL_SESSION_RESET_LIMIT`      |    `10` |
 | `RL_SESSION_RESET_WINDOW_MS`  | `60000` |
+| `RL_SESSION_GET_LIMIT`        |    `60` |
+| `RL_SESSION_GET_WINDOW_MS`    | `60000` |
 | `RL_QUEUE_LIMIT`              |     `5` |
 | `RL_QUEUE_WINDOW_MS`          | `10000` |
 | `RL_MOVE_LIMIT`               |    `10` |
@@ -107,6 +112,10 @@ Rate-limit policies define their dependency behavior:
 - authentication/revocation checks fail closed when Redis cannot be consulted;
 - anti-abuse counters may fail open briefly for already-authenticated gameplay so Redis loss does not corrupt or freeze a durable game;
 - session creation and matchmaking return `SERVICE_UNAVAILABLE` when their Redis correctness/coordination path is unavailable.
+
+Session-create counters use only a SHA-256 digest of the transient client
+address and expire with the configured window. No IP address or device
+fingerprint is written to PostgreSQL.
 
 ## 5. Background-job configuration
 
