@@ -30,15 +30,15 @@ This avoids a cross-datastore race that could invalidate the credential needed t
 
 Add a `session_commands` table:
 
-| Column | Purpose |
-|---|---|
-| `id` | UUID primary key |
-| `command_type` | `create`, `renew`, or `reset` |
-| `idempotency_key_hash` | SHA-256 of the normalized key |
-| `guest_id` | Guest affected by the command |
-| `issued_jti` | Token issuance returned by create/renew, if any |
-| `issued_at` / `expires_at` | Exact token claims returned by create/renew |
-| `created_at` | Audit/retention timestamp |
+| Column                     | Purpose                                         |
+| -------------------------- | ----------------------------------------------- |
+| `id`                       | UUID primary key                                |
+| `command_type`             | `create`, `renew`, or `reset`                   |
+| `idempotency_key_hash`     | SHA-256 of the normalized key                   |
+| `guest_id`                 | Guest affected by the command                   |
+| `issued_jti`               | Token issuance returned by create/renew, if any |
+| `issued_at` / `expires_at` | Exact token claims returned by create/renew     |
+| `created_at`               | Audit/retention timestamp                       |
 
 `UNIQUE(idempotency_key_hash)` makes retries return the same guest and issuance claims. Reuse of a key for a different authenticated guest or command returns `IDEMPOTENCY_KEY_REUSED`.
 

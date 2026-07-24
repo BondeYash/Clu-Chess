@@ -19,9 +19,12 @@ That command will:
 4. run a one-shot Docker key-generation service when local Ed25519 keys do not exist;
 5. apply development Prisma migrations through a one-shot migration service;
 6. start the application after healthy dependencies and successful migration;
-7. optionally start the local Nginx, OpenTelemetry Collector, and Prometheus profiles when requested.
+7. leave optional edge and observability services disabled until their planned
+   hardening phases.
 
-No developer must install PostgreSQL, Redis, Nginx, Prometheus, or an OTel collector directly. Tests that need PostgreSQL/Redis use Docker-backed Testcontainers.
+No developer must install PostgreSQL or Redis directly. Phase 1 integration
+tests use isolated Docker Compose services; later datastore suites may use
+Testcontainers while retaining Docker as the only host prerequisite.
 
 No committed file contains a production secret. Local-only generated files and volumes are ignored by Git.
 
@@ -39,60 +42,64 @@ Raw private key values are not placed in `.env`, Compose YAML, image layers, com
 
 An optional untracked `.env.local` may override non-secret developer settings, but it is never required for the standard workflow.
 
+If another local process already owns port `3000`, `APP_PORT=3300 docker compose
+up --build` changes only the host-side port mapping. The application still
+listens on its validated `PORT=3000` inside Docker.
+
 ## 3. Configuration matrix
 
 All duration values use explicit millisecond or second suffixes. Startup validation rejects absent, malformed, unsafe, or contradictory values.
 
-| Variable | Local default | Test default | Production rule |
-|---|---|---|---|
-| `NODE_ENV` | `development` | `test` | `production` |
-| `PORT` | `3000` | allocated | platform supplied or `3000` |
-| `DATABASE_URL` | Compose PostgreSQL URL | Testcontainers URL | required secret/reference |
-| `DATABASE_POOL_MAX` | `20` | `5` | required, initially `20–40` |
-| `DATABASE_TX_TIMEOUT_MS` | `3000` | `3000` | required |
-| `REDIS_URL` | Compose Redis URL | Testcontainers URL | required secret/reference |
-| `JWT_PRIVATE_KEY_FILE` | generated volume path | generated test key path | required mounted secret |
-| `JWT_PUBLIC_KEYS_DIR` | generated volume directory | generated test directory | required mounted key set |
-| `JWT_KID` | `local-dev-1` | `test-1` | required unique key ID |
-| `JWT_TTL_SECONDS` | `43200` | `3600` | default `43200` |
-| `JWT_CLOCK_SKEW_SECONDS` | `30` | `0` | default `30` |
-| `ORIGIN_ALLOWLIST` | `http://localhost:5173` | test origin | required HTTPS origins |
-| `TIME_INITIAL_MS` | `300000` | scenario supplied | default `300000` |
-| `TIME_INCREMENT_MS` | `2000` | scenario supplied | default `2000` |
-| `JOIN_DEADLINE_MS` | `20000` | shorter fake-time config | default `20000` |
-| `GRACE_MS` | `30000` | shorter fake-time config | default `30000` |
-| `RESERVATION_TTL_MS` | `30000` | shorter integration value | default `30000` |
-| `PRESENCE_TTL_MS` | `45000` | shorter integration value | default `45000` |
-| `QUEUE_GUARD_TTL_MS` | `120000` | shorter integration value | default `120000` |
-| `QUEUE_MAX_WAIT_MS` | `120000` | shorter integration value | default `120000` |
-| `SNAPSHOT_CACHE_TTL_MS` | `60000` | shorter integration value | default `60000` |
-| `MAX_WS_BUFFER_BYTES` | `8192` | `8192` | maximum `8192` for v1 |
-| `DRAIN_TIMEOUT_MS` | `15000` | `1000` | default `15000` |
-| `SOCKET_PING_INTERVAL_MS` | `25000` | scenario supplied | default `25000` |
-| `SOCKET_PING_TIMEOUT_MS` | `20000` | scenario supplied | default `20000` |
-| `LOG_LEVEL` | `debug` | `warn` | `info` unless overridden |
-| `OTEL_ENABLED` | `false` | `false` | `true` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Compose profile URL | test collector | required when OTel enabled |
-| `METRICS_ENABLED` | `true` | `true` | `true` |
-| `INSTANCE_ID` | generated hostname | generated | platform/hostname supplied |
+| Variable                      | Local default              | Test default              | Production rule             |
+| ----------------------------- | -------------------------- | ------------------------- | --------------------------- |
+| `NODE_ENV`                    | `development`              | `test`                    | `production`                |
+| `PORT`                        | `3000`                     | allocated                 | platform supplied or `3000` |
+| `DATABASE_URL`                | Compose PostgreSQL URL     | Testcontainers URL        | required secret/reference   |
+| `DATABASE_POOL_MAX`           | `20`                       | `5`                       | required, initially `20–40` |
+| `DATABASE_TX_TIMEOUT_MS`      | `3000`                     | `3000`                    | required                    |
+| `REDIS_URL`                   | Compose Redis URL          | Testcontainers URL        | required secret/reference   |
+| `JWT_PRIVATE_KEY_FILE`        | generated volume path      | generated test key path   | required mounted secret     |
+| `JWT_PUBLIC_KEYS_DIR`         | generated volume directory | generated test directory  | required mounted key set    |
+| `JWT_KID`                     | `local-dev-1`              | `test-1`                  | required unique key ID      |
+| `JWT_TTL_SECONDS`             | `43200`                    | `3600`                    | default `43200`             |
+| `JWT_CLOCK_SKEW_SECONDS`      | `30`                       | `0`                       | default `30`                |
+| `ORIGIN_ALLOWLIST`            | `http://localhost:5173`    | test origin               | required HTTPS origins      |
+| `TIME_INITIAL_MS`             | `300000`                   | scenario supplied         | default `300000`            |
+| `TIME_INCREMENT_MS`           | `2000`                     | scenario supplied         | default `2000`              |
+| `JOIN_DEADLINE_MS`            | `20000`                    | shorter fake-time config  | default `20000`             |
+| `GRACE_MS`                    | `30000`                    | shorter fake-time config  | default `30000`             |
+| `RESERVATION_TTL_MS`          | `30000`                    | shorter integration value | default `30000`             |
+| `PRESENCE_TTL_MS`             | `45000`                    | shorter integration value | default `45000`             |
+| `QUEUE_GUARD_TTL_MS`          | `120000`                   | shorter integration value | default `120000`            |
+| `QUEUE_MAX_WAIT_MS`           | `120000`                   | shorter integration value | default `120000`            |
+| `SNAPSHOT_CACHE_TTL_MS`       | `60000`                    | shorter integration value | default `60000`             |
+| `MAX_WS_BUFFER_BYTES`         | `8192`                     | `8192`                    | maximum `8192` for v1       |
+| `DRAIN_TIMEOUT_MS`            | `15000`                    | `1000`                    | default `15000`             |
+| `SOCKET_PING_INTERVAL_MS`     | `25000`                    | scenario supplied         | default `25000`             |
+| `SOCKET_PING_TIMEOUT_MS`      | `20000`                    | scenario supplied         | default `20000`             |
+| `LOG_LEVEL`                   | `debug`                    | `warn`                    | `info` unless overridden    |
+| `OTEL_ENABLED`                | `false`                    | `false`                   | `true`                      |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Compose profile URL        | test collector            | required when OTel enabled  |
+| `METRICS_ENABLED`             | `true`                     | `true`                    | `true`                      |
+| `INSTANCE_ID`                 | generated hostname         | generated                 | platform/hostname supplied  |
 
 ## 4. Rate-limit configuration
 
-| Variable | Default |
-|---|---:|
-| `RL_SESSION_CREATE_LIMIT` | `10` |
+| Variable                      | Default |
+| ----------------------------- | ------: |
+| `RL_SESSION_CREATE_LIMIT`     |    `10` |
 | `RL_SESSION_CREATE_WINDOW_MS` | `60000` |
-| `RL_SESSION_RENEW_LIMIT` | `30` |
-| `RL_SESSION_RENEW_WINDOW_MS` | `60000` |
-| `RL_SESSION_RESET_LIMIT` | `10` |
-| `RL_SESSION_RESET_WINDOW_MS` | `60000` |
-| `RL_QUEUE_LIMIT` | `5` |
-| `RL_QUEUE_WINDOW_MS` | `10000` |
-| `RL_MOVE_LIMIT` | `10` |
-| `RL_MOVE_WINDOW_MS` | `1000` |
-| `RL_SYNC_LIMIT` | `120` |
-| `RL_SYNC_WINDOW_MS` | `60000` |
-| `RL_CONNECTIONS_PER_IP` | `20` |
+| `RL_SESSION_RENEW_LIMIT`      |    `30` |
+| `RL_SESSION_RENEW_WINDOW_MS`  | `60000` |
+| `RL_SESSION_RESET_LIMIT`      |    `10` |
+| `RL_SESSION_RESET_WINDOW_MS`  | `60000` |
+| `RL_QUEUE_LIMIT`              |     `5` |
+| `RL_QUEUE_WINDOW_MS`          | `10000` |
+| `RL_MOVE_LIMIT`               |    `10` |
+| `RL_MOVE_WINDOW_MS`           |  `1000` |
+| `RL_SYNC_LIMIT`               |   `120` |
+| `RL_SYNC_WINDOW_MS`           | `60000` |
+| `RL_CONNECTIONS_PER_IP`       |    `20` |
 
 Rate-limit policies define their dependency behavior:
 
@@ -102,16 +109,16 @@ Rate-limit policies define their dependency behavior:
 
 ## 5. Background-job configuration
 
-| Variable | Default |
-|---|---:|
-| `JOB_MATCH_DRAIN_MS` | `250` |
-| `JOB_QUEUE_SWEEP_MS` | `5000` |
-| `JOB_RESERVATION_RECONCILE_MS` | `5000` |
-| `JOB_DEADLINE_SWEEP_MS` | `1000` |
-| `JOB_ACTIVE_DRIFT_MS` | `15000` |
-| `JOB_REVOCATION_REBUILD_MS` | `300000` |
-| `JOB_SESSION_CLEANUP_MS` | `3600000` |
-| `JOB_BATCH_SIZE` | `100` |
+| Variable                       |   Default |
+| ------------------------------ | --------: |
+| `JOB_MATCH_DRAIN_MS`           |     `250` |
+| `JOB_QUEUE_SWEEP_MS`           |    `5000` |
+| `JOB_RESERVATION_RECONCILE_MS` |    `5000` |
+| `JOB_DEADLINE_SWEEP_MS`        |    `1000` |
+| `JOB_ACTIVE_DRIFT_MS`          |   `15000` |
+| `JOB_REVOCATION_REBUILD_MS`    |  `300000` |
+| `JOB_SESSION_CLEANUP_MS`       | `3600000` |
+| `JOB_BATCH_SIZE`               |     `100` |
 
 Every value is bounded by validation so an accidental zero/tiny interval cannot busy-loop the process.
 

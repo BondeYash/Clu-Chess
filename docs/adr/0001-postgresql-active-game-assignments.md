@@ -14,11 +14,11 @@ The one-active-game rule is a correctness invariant and therefore needs a Postgr
 
 Add an `active_game_assignments` table:
 
-| Column | Type | Rule |
-|---|---|---|
-| `guest_id` | `uuid` | Primary key; FK to `guest_sessions(id)` with `ON DELETE RESTRICT` |
-| `game_id` | `uuid` | Required FK to `games(id)` with `ON DELETE CASCADE` |
-| `created_at` | `timestamptz` | Required, default `now()` |
+| Column       | Type          | Rule                                                              |
+| ------------ | ------------- | ----------------------------------------------------------------- |
+| `guest_id`   | `uuid`        | Primary key; FK to `guest_sessions(id)` with `ON DELETE RESTRICT` |
+| `game_id`    | `uuid`        | Required FK to `games(id)` with `ON DELETE CASCADE`               |
+| `created_at` | `timestamptz` | Required, default `now()`                                         |
 
 Add an index on `game_id`. Do **not** make `game_id` unique because a valid active game has two assignment rows.
 

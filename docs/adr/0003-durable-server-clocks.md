@@ -12,13 +12,13 @@ Persisting only the last remaining milliseconds is not enough to reconstruct a r
 
 Persist these game fields:
 
-| Field | Rule |
-|---|---|
-| `white_clock_ms` | Required non-negative integer; initialized from the time control |
-| `black_clock_ms` | Required non-negative integer; initialized from the time control |
-| `turn_started_at` | Nullable `timestamptz`; non-null while a clock is running |
-| `time_initial_ms` | Required positive integer |
-| `time_increment_ms` | Required non-negative integer |
+| Field               | Rule                                                             |
+| ------------------- | ---------------------------------------------------------------- |
+| `white_clock_ms`    | Required non-negative integer; initialized from the time control |
+| `black_clock_ms`    | Required non-negative integer; initialized from the time control |
+| `turn_started_at`   | Nullable `timestamptz`; non-null while a clock is running        |
+| `time_initial_ms`   | Required positive integer                                        |
+| `time_increment_ms` | Required non-negative integer                                    |
 
 Each accepted move row also stores `server_received_at`, the authoritative adjudication timestamp used for its clock calculation.
 

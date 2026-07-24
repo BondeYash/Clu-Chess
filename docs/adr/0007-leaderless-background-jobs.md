@@ -27,18 +27,18 @@ In-process timers are latency optimizations. Periodic jobs are the recovery guar
 
 ## Job catalog and initial cadence
 
-| Job | Initial cadence | Batch | Correctness guard |
-|---|---:|---:|---|
-| Match backlog drain | 250 ms when queue non-empty | pairs until bounded budget | atomic `try_match.lua` |
-| Stale queue sweep | 5 s | 200 members/mode | presence + queue-member compare/remove |
-| Reservation/allocation reconcile | 5 s | 100 | `match_id`, active assignments, reservation compare |
-| Join deadline sweep | 1 s | 100 games | row lock + status/version + `join_deadline_at` |
-| Clock deadline sweep | 1 s | 100 games | ADR 0003 recomputation under row lock |
-| Disconnect grace sweep | 1 s | 100 players/games | row lock + per-socket presence + durable `grace_deadline_at` + version |
-| Active-game/Redis drift reconcile | 15 s | 100 assignments/games | PostgreSQL truth + compare/set/delete |
-| Revoked-session Redis rebuild | startup, then 5 min | 500 sessions | durable `revoked_at` and token horizon |
-| Expired session cleanup | 1 h | 500 sessions | retention predicate + FK safety |
-| Old command/idempotency cleanup | 1 h | 500 rows | retention horizon |
+| Job                               |             Initial cadence |                      Batch | Correctness guard                                                      |
+| --------------------------------- | --------------------------: | -------------------------: | ---------------------------------------------------------------------- |
+| Match backlog drain               | 250 ms when queue non-empty | pairs until bounded budget | atomic `try_match.lua`                                                 |
+| Stale queue sweep                 |                         5 s |           200 members/mode | presence + queue-member compare/remove                                 |
+| Reservation/allocation reconcile  |                         5 s |                        100 | `match_id`, active assignments, reservation compare                    |
+| Join deadline sweep               |                         1 s |                  100 games | row lock + status/version + `join_deadline_at`                         |
+| Clock deadline sweep              |                         1 s |                  100 games | ADR 0003 recomputation under row lock                                  |
+| Disconnect grace sweep            |                         1 s |          100 players/games | row lock + per-socket presence + durable `grace_deadline_at` + version |
+| Active-game/Redis drift reconcile |                        15 s |      100 assignments/games | PostgreSQL truth + compare/set/delete                                  |
+| Revoked-session Redis rebuild     |         startup, then 5 min |               500 sessions | durable `revoked_at` and token horizon                                 |
+| Expired session cleanup           |                         1 h |               500 sessions | retention predicate + FK safety                                        |
+| Old command/idempotency cleanup   |                         1 h |                   500 rows | retention horizon                                                      |
 
 Cadences are configuration values and may be tuned from metrics without changing semantics.
 

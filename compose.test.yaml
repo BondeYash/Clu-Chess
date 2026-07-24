@@ -1,0 +1,26 @@
+services:
+  test:
+    build:
+      context: .
+      target: development
+    command:
+      - sh
+      - -c
+      - npm run prisma:generate && npm run prisma:deploy && npm run test:integration
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_POOL_MAX: '5'
+      DATABASE_URL: postgresql://cluchess:cluchess_dev@postgres:5432/cluchess?schema=public
+      DRAIN_TIMEOUT_MS: '4000'
+      INSTANCE_ID: integration-test
+      JWT_CLOCK_SKEW_SECONDS: '0'
+      JWT_KID: test-1
+      LOG_LEVEL: silent
+      NODE_ENV: test
+      ORIGIN_ALLOWLIST: http://test.local
+      OTEL_ENABLED: 'false'
+      REDIS_URL: redis://redis:6379

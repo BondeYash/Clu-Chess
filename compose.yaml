@@ -1,0 +1,108 @@
+name: cluchess
+
+services:
+  postgres:
+    image: postgres:16.9-alpine
+    environment:
+      POSTGRES_DB: cluchess
+      POSTGRES_PASSWORD: cluchess_dev
+      POSTGRES_USER: cluchess
+      TZ: UTC
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U cluchess -d cluchess']
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7.4.5-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - redis-data:/data
+
+  keygen:
+    build:
+      context: .
+      target: development
+    command: ['node', 'scripts/generate-local-keys.mjs']
+    environment:
+      JWT_KID: local-dev-1
+      KEY_OUTPUT_DIR: /run/secrets/cluchess
+      KEY_OWNER_GID: '1000'
+      KEY_OWNER_UID: '1000'
+    user: '0:0'
+    volumes:
+      - jwt-keys:/run/secrets/cluchess
+
+  migrate:
+    build:
+      context: .
+      target: development
+    command: ['npm', 'run', 'prisma:deploy']
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://cluchess:cluchess_dev@postgres:5432/cluchess?schema=public
+
+  app:
+    build:
+      context: .
+      target: development
+    command:
+      - sh
+      - -c
+      - npm run prisma:generate && npm run start:dev
+    depends_on:
+      keygen:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://cluchess:cluchess_dev@postgres:5432/cluchess?schema=public
+      INSTANCE_ID: local-compose
+      JWT_KID: local-dev-1
+      JWT_PRIVATE_KEY_FILE: /run/secrets/cluchess/jwt-private.pem
+      JWT_PUBLIC_KEYS_DIR: /run/secrets/cluchess/public
+      LOG_LEVEL: debug
+      NODE_ENV: development
+      ORIGIN_ALLOWLIST: http://localhost:5173
+      OTEL_ENABLED: 'false'
+      PORT: '3000'
+      REDIS_URL: redis://redis:6379
+      TZ: UTC
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    ports:
+      - '${APP_PORT:-3000}:3000'
+    volumes:
+      - .:/workspace
+      - app-node-modules:/workspace/node_modules
+      - jwt-keys:/run/secrets/cluchess:ro
+
+volumes:
+  app-node-modules:
+  jwt-keys:
+  postgres-data:
+  redis-data:

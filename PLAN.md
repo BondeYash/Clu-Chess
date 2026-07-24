@@ -235,9 +235,9 @@ Create a reproducible development and CI environment with strict configuration, 
 
 #### Project bootstrap
 
-- [ ] Initialize the NestJS application on Node.js 24 LTS with TypeScript `strict: true`.
-- [ ] Select and lock one package manager; commit its lockfile and runtime version metadata.
-- [ ] Create the module structure from `Architecture.md`:
+- [x] Initialize the NestJS application on Node.js 24 LTS with TypeScript `strict: true`.
+- [x] Select and lock one package manager; commit its lockfile and runtime version metadata.
+- [x] Create the module structure from `Architecture.md`:
   - `session`;
   - `identity`;
   - `matchmaking`;
@@ -248,47 +248,51 @@ Create a reproducible development and CI environment with strict configuration, 
   - `persistence`;
   - `health`;
   - `common`.
-- [ ] Enforce module boundaries so transport modules call application services and domain code does not import infrastructure libraries.
-- [ ] Configure linting, formatting, type checking, unit tests, integration tests, and coverage commands.
-- [ ] Add path aliases only where they do not hide module ownership.
+- [x] Enforce module boundaries so transport modules call application services and domain code does not import infrastructure libraries.
+- [x] Configure linting, formatting, type checking, unit tests, integration tests, and coverage commands.
+- [x] Add path aliases only where they do not hide module ownership.
 
 #### Configuration and process lifecycle
 
-- [ ] Add Zod validation for all environment variables and fail startup on invalid configuration.
-- [ ] Add `.env.example` without secrets.
-- [ ] Add a process lifecycle service for startup, readiness state, `SIGTERM`, drain, and shutdown.
-- [ ] Add `/healthz` as process liveness only.
-- [ ] Add `/readyz` with PostgreSQL and Redis dependency status and a drain-state override.
-- [ ] Establish consistent UTC storage and server-time handling.
+- [x] Add Zod validation for all environment variables and fail startup on invalid configuration.
+- [x] Add `.env.example` without secrets.
+- [x] Add a process lifecycle service for startup, readiness state, `SIGTERM`, drain, and shutdown.
+- [x] Add `/healthz` as process liveness only.
+- [x] Add `/readyz` with PostgreSQL and Redis dependency status and a drain-state override.
+- [x] Establish consistent UTC storage and server-time handling.
 
 #### Local infrastructure and build
 
-- [ ] Add Docker Compose services for the app, PostgreSQL 16+, and Redis 7+.
-- [ ] Add a multi-stage production Dockerfile with a non-root runtime user and minimal runtime contents.
-- [ ] Add Prisma generation/migration commands, but do not run production migrations automatically on app boot.
-- [ ] Add test-specific infrastructure configuration.
+- [x] Add Docker Compose services for the app, PostgreSQL 16+, and Redis 7+.
+- [x] Add a multi-stage production Dockerfile with a non-root runtime user and minimal runtime contents.
+- [x] Add Prisma generation/migration commands, but do not run production migrations automatically on app boot.
+- [x] Add test-specific infrastructure configuration.
 
 #### Baseline observability and CI
 
-- [ ] Configure Pino JSON logging and secret redaction.
-- [ ] Generate/propagate correlation IDs for HTTP requests.
-- [ ] Initialize OpenTelemetry in a way that can be disabled locally.
-- [ ] Add CI jobs for install, lint, type check, unit tests, integration tests, build, migration validation, dependency audit, and container build.
+- [x] Configure Pino JSON logging and secret redaction.
+- [x] Generate/propagate correlation IDs for HTTP requests.
+- [x] Initialize OpenTelemetry in a way that can be disabled locally.
+- [x] Add CI jobs for install, lint, type check, unit tests, integration tests, build, migration validation, dependency audit, and container build.
 
 ### Verification
 
-- [ ] `docker compose up` starts all dependencies and the app from a clean checkout.
-- [ ] Invalid environment configuration prevents startup with a safe error.
-- [ ] `/healthz` stays live during a Redis/PostgreSQL dependency failure.
-- [ ] `/readyz` becomes unavailable during dependency failure or graceful drain.
-- [ ] The production image runs as non-root and starts from built artifacts.
-- [ ] CI passes on an empty feature skeleton.
+- [x] `docker compose up` starts all dependencies and the app from a clean checkout.
+- [x] Invalid environment configuration prevents startup with a safe error.
+- [x] `/healthz` stays live during a Redis/PostgreSQL dependency failure.
+- [x] `/readyz` becomes unavailable during dependency failure or graceful drain.
+- [x] The production image runs as non-root and starts from built artifacts.
+- [x] CI passes on an empty feature skeleton.
 
 ### Exit criteria
 
 - A clean developer machine can boot, test, and build the service using documented commands.
 - Health semantics and graceful process hooks exist before feature code.
 - Strict typing and module boundaries are enforced automatically.
+
+> **Result:** Passed locally under the pinned Node.js 24 toolchain. The
+> Docker-only clean boot, migration, dependency-failure, graceful-drain,
+> integration-test, and non-root production-image checks all passed.
 
 ---
 

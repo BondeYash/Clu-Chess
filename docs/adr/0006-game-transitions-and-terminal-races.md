@@ -55,34 +55,34 @@ No-show, disconnect, timeout, reset, resignation, and terminal-move handlers can
 
 `games.version` is the monotonic **game-state version**, not the ply count.
 
-| Transition | Version behavior |
-|---|---|
-| creation through `WAITING_FOR_PLAYERS` in one allocation transaction | starts at `0` |
-| `WAITING_FOR_PLAYERS → READY` | `+1` |
-| `READY → IN_PROGRESS` | `+1` |
-| accepted move remaining `IN_PROGRESS` | `+1` |
-| terminal accepted move | `+1` once for move + terminal state |
-| `IN_PROGRESS → RECONNECTING` | `+1` |
-| `RECONNECTING → IN_PROGRESS` | `+1` |
-| resignation, timeout, no-show, abandonment, or double abandonment | `+1` |
-| cache/Redis/socket cleanup | no change |
+| Transition                                                           | Version behavior                    |
+| -------------------------------------------------------------------- | ----------------------------------- |
+| creation through `WAITING_FOR_PLAYERS` in one allocation transaction | starts at `0`                       |
+| `WAITING_FOR_PLAYERS → READY`                                        | `+1`                                |
+| `READY → IN_PROGRESS`                                                | `+1`                                |
+| accepted move remaining `IN_PROGRESS`                                | `+1`                                |
+| terminal accepted move                                               | `+1` once for move + terminal state |
+| `IN_PROGRESS → RECONNECTING`                                         | `+1`                                |
+| `RECONNECTING → IN_PROGRESS`                                         | `+1`                                |
+| resignation, timeout, no-show, abandonment, or double abandonment    | `+1`                                |
+| cache/Redis/socket cleanup                                           | no change                           |
 
 Every durable transition locks the game row and updates with the previously read version as an optimistic guard. Events created by that transition carry the resulting version. `moves.ply_number` remains the independent contiguous move counter.
 
 ### Frozen outcomes
 
-| Situation | Status | Result | Termination |
-|---|---|---|---|
-| White misses join deadline, black joined | `EXPIRED` | `black_win` | `no_show` |
-| Black misses join deadline, white joined | `EXPIRED` | `white_win` | `no_show` |
-| Neither player joins | `EXPIRED` | `void` | `no_show` |
-| Legal checkmate | `COMPLETED` | winner by board | `checkmate` |
-| Automatic rule draw | `COMPLETED` | `draw` | rule-specific reason |
-| Player resigns | `COMPLETED` | opponent wins | `resignation` |
-| Player's clock expires | `COMPLETED` | opponent wins | `timeout` |
-| One player absent after grace | `ABANDONED` | opponent wins | `abandonment` |
-| Both players absent when the first valid grace adjudication runs | `ABANDONED` | `void` | `double_abandon` |
-| Session reset/logout while active | `ABANDONED` immediately | opponent wins | `abandonment` |
+| Situation                                                        | Status                  | Result          | Termination          |
+| ---------------------------------------------------------------- | ----------------------- | --------------- | -------------------- |
+| White misses join deadline, black joined                         | `EXPIRED`               | `black_win`     | `no_show`            |
+| Black misses join deadline, white joined                         | `EXPIRED`               | `white_win`     | `no_show`            |
+| Neither player joins                                             | `EXPIRED`               | `void`          | `no_show`            |
+| Legal checkmate                                                  | `COMPLETED`             | winner by board | `checkmate`          |
+| Automatic rule draw                                              | `COMPLETED`             | `draw`          | rule-specific reason |
+| Player resigns                                                   | `COMPLETED`             | opponent wins   | `resignation`        |
+| Player's clock expires                                           | `COMPLETED`             | opponent wins   | `timeout`            |
+| One player absent after grace                                    | `ABANDONED`             | opponent wins   | `abandonment`        |
+| Both players absent when the first valid grace adjudication runs | `ABANDONED`             | `void`          | `double_abandon`     |
+| Session reset/logout while active                                | `ABANDONED` immediately | opponent wins   | `abandonment`        |
 
 Clocks continue in `RECONNECTING`. A clock may therefore end the game before grace expiry.
 

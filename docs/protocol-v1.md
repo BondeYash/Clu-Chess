@@ -18,19 +18,19 @@
 
 ## 2. Scalar formats
 
-| Name | Format |
-|---|---|
-| UUID | Lower/upper-case RFC 4122 UUID accepted; normalized lowercase internally |
-| `eventId` | Client UUIDv4 for C→S; server UUIDv4 for S→C |
-| `clientMoveId` | Client UUIDv4, stable across move retry |
-| `correlationId` | UUIDv4 generated at boundary unless a valid one was supplied |
-| `gameId` / `matchId` / `guestId` | UUIDv4 |
-| Board square | `/^[a-h][1-8]$/` |
-| Promotion | `q`, `r`, `b`, or `n` |
-| Epoch timestamp | Integer milliseconds since Unix epoch |
-| Game version | Non-negative safe integer |
-| Clock value | Non-negative integer milliseconds |
-| Mode | Literal `blitz` in v1 |
+| Name                             | Format                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------ |
+| UUID                             | Lower/upper-case RFC 4122 UUID accepted; normalized lowercase internally |
+| `eventId`                        | Client UUIDv4 for C→S; server UUIDv4 for S→C                             |
+| `clientMoveId`                   | Client UUIDv4, stable across move retry                                  |
+| `correlationId`                  | UUIDv4 generated at boundary unless a valid one was supplied             |
+| `gameId` / `matchId` / `guestId` | UUIDv4                                                                   |
+| Board square                     | `/^[a-h][1-8]$/`                                                         |
+| Promotion                        | `q`, `r`, `b`, or `n`                                                    |
+| Epoch timestamp                  | Integer milliseconds since Unix epoch                                    |
+| Game version                     | Non-negative safe integer                                                |
+| Clock value                      | Non-negative integer milliseconds                                        |
+| Mode                             | Literal `blitz` in v1                                                    |
 
 Client timestamps are diagnostic only. Server/PostgreSQL time decides expiry, clocks, ordering, and terminal results.
 
@@ -54,25 +54,25 @@ Wire color values are `white | black`. Persistence/engine values may use `w | b`
 
 ### Error codes
 
-| Code | Meaning | Retry |
-|---|---|---|
-| `UNAUTHORIZED` | Missing, invalid, expired, or revoked identity | after obtaining valid session |
-| `INVALID_PAYLOAD` | Envelope or payload failed strict validation | no, fix request |
-| `UNSUPPORTED_PROTOCOL_VERSION` | `protocolVersion` is not supported | no, upgrade client |
-| `UNSUPPORTED_EVENT` | Event name/type is unknown | no, fix client |
-| `IDEMPOTENCY_KEY_REUSED` | Key was used for a different command/actor | no, generate a new key |
-| `ALREADY_QUEUED` | Guest is already queued | semantic success/current state |
-| `ALREADY_IN_GAME` | Guest has a durable active assignment | recover active game |
-| `GAME_NOT_FOUND` | Game does not exist or is no longer available | usually no |
-| `GAME_ALREADY_ENDED` | Another valid terminal transition won | sync snapshot |
-| `NOT_A_PLAYER` | Authenticated guest is not a game member | no |
-| `NOT_YOUR_TURN` | Guest's color is not on turn | after opponent move |
-| `ILLEGAL_MOVE` | Chess rules reject the proposal | no, choose legal move |
-| `STALE_GAME_VERSION` | Client expected version is old | yes, after sync |
-| `CLOCK_EXPIRED` | Authoritative clock expired before move | no, game will be terminal |
-| `RATE_LIMITED` | Scope limit exceeded | after `retryAfterMs` |
-| `SERVICE_UNAVAILABLE` | Dependency or instance is degraded/draining | yes with backoff |
-| `INTERNAL_ERROR` | Safe fallback for an unexpected failure | yes with backoff |
+| Code                           | Meaning                                        | Retry                          |
+| ------------------------------ | ---------------------------------------------- | ------------------------------ |
+| `UNAUTHORIZED`                 | Missing, invalid, expired, or revoked identity | after obtaining valid session  |
+| `INVALID_PAYLOAD`              | Envelope or payload failed strict validation   | no, fix request                |
+| `UNSUPPORTED_PROTOCOL_VERSION` | `protocolVersion` is not supported             | no, upgrade client             |
+| `UNSUPPORTED_EVENT`            | Event name/type is unknown                     | no, fix client                 |
+| `IDEMPOTENCY_KEY_REUSED`       | Key was used for a different command/actor     | no, generate a new key         |
+| `ALREADY_QUEUED`               | Guest is already queued                        | semantic success/current state |
+| `ALREADY_IN_GAME`              | Guest has a durable active assignment          | recover active game            |
+| `GAME_NOT_FOUND`               | Game does not exist or is no longer available  | usually no                     |
+| `GAME_ALREADY_ENDED`           | Another valid terminal transition won          | sync snapshot                  |
+| `NOT_A_PLAYER`                 | Authenticated guest is not a game member       | no                             |
+| `NOT_YOUR_TURN`                | Guest's color is not on turn                   | after opponent move            |
+| `ILLEGAL_MOVE`                 | Chess rules reject the proposal                | no, choose legal move          |
+| `STALE_GAME_VERSION`           | Client expected version is old                 | yes, after sync                |
+| `CLOCK_EXPIRED`                | Authoritative clock expired before move        | no, game will be terminal      |
+| `RATE_LIMITED`                 | Scope limit exceeded                           | after `retryAfterMs`           |
+| `SERVICE_UNAVAILABLE`          | Dependency or instance is degraded/draining    | yes with backoff               |
+| `INTERNAL_ERROR`               | Safe fallback for an unexpected failure        | yes with backoff               |
 
 `DUPLICATE_MOVE` is a metric/internal classification, not a wire failure. A repeated accepted `clientMoveId` returns the original `move.accepted` success.
 
@@ -158,7 +158,9 @@ Envelope:
 Payload:
 
 ```ts
-{ mode: 'blitz' }
+{
+  mode: 'blitz';
+}
 ```
 
 Success type: `queue.joined`
@@ -178,7 +180,9 @@ Success type: `queue.joined`
 Payload:
 
 ```ts
-{ mode: 'blitz' }
+{
+  mode: 'blitz';
+}
 ```
 
 Success type: `queue.left`
@@ -202,7 +206,8 @@ Envelope:
 Payload:
 
 ```ts
-{}
+{
+}
 ```
 
 Success type: `game.snapshot`. Repeating readiness returns the current snapshot and does not transition twice.
@@ -240,7 +245,8 @@ Envelope:
 Payload:
 
 ```ts
-{}
+{
+}
 ```
 
 Success type: `game.ended`.
@@ -255,7 +261,8 @@ Envelope:
 Payload:
 
 ```ts
-{}
+{
+}
 ```
 
 Success type is the complete `game.snapshot` or `session.ready` when no active game exists.
@@ -299,7 +306,7 @@ interface PublicPlayer {
     name: string;
     avatar: string;
     expiresAt: string;
-  };
+  }
   activeGameId: string | null;
 }
 ```
@@ -322,11 +329,11 @@ Envelope requires `gameId` and authoritative `gameVersion`.
   opponent: {
     name: string;
     avatar: string;
-  };
+  }
   timeControl: {
     initialMs: number;
     incrementMs: number;
-  };
+  }
   joinDeadline: number;
 }
 ```
@@ -352,7 +359,7 @@ Envelope requires `gameId` and authoritative `gameVersion`.
     blackMs: number;
     running: 'white' | 'black' | null;
     serverTime: number;
-  };
+  }
   result: Result | null;
   termination: Termination | null;
 }
@@ -371,7 +378,7 @@ Envelope `gameVersion` is authoritative. Snapshot move count is not assumed to e
     blackMs: number;
     running: 'white';
     serverTime: number;
-  };
+  }
 }
 ```
 
@@ -389,7 +396,7 @@ Envelope `gameVersion` is authoritative. Snapshot move count is not assumed to e
     blackMs: number;
     running: 'white' | 'black' | null;
     serverTime: number;
-  };
+  }
   check: boolean;
 }
 ```
@@ -433,7 +440,7 @@ The reconnecting player also receives `game.snapshot`.
     blackMs: number;
     running: null;
     serverTime: number;
-  };
+  }
 }
 ```
 
@@ -456,12 +463,12 @@ Uses the payload in §6.
 
 ### Common headers
 
-| Header | Rule |
-|---|---|
-| `Content-Type` | `application/json` for JSON requests |
-| `Authorization` | Bearer JWT for authenticated endpoints |
-| `X-Correlation-Id` | Optional UUIDv4; invalid values are replaced |
-| `Idempotency-Key` | Required UUIDv4 for session create/renew/reset |
+| Header             | Rule                                           |
+| ------------------ | ---------------------------------------------- |
+| `Content-Type`     | `application/json` for JSON requests           |
+| `Authorization`    | Bearer JWT for authenticated endpoints         |
+| `X-Correlation-Id` | Optional UUIDv4; invalid values are replaced   |
+| `Idempotency-Key`  | Required UUIDv4 for session create/renew/reset |
 
 Every JSON success includes `correlationId`.
 
@@ -497,7 +504,7 @@ Response:
     name: string;
     avatar: string;
     expiresAt: string;
-  };
+  }
   correlationId: string;
 }
 ```
@@ -536,7 +543,7 @@ Response:
     avatar: string;
     issuedAt: string;
     expiresAt: string;
-  };
+  }
   correlationId: string;
 }
 ```
@@ -552,7 +559,10 @@ Response:
 Response:
 
 ```ts
-{ ok: true; correlationId: string }
+{
+  ok: true;
+  correlationId: string;
+}
 ```
 
 ### `GET /v1/games/active`
@@ -564,7 +574,10 @@ Response:
 Response:
 
 ```ts
-{ gameId: string | null; correlationId: string }
+{
+  gameId: string | null;
+  correlationId: string;
+}
 ```
 
 ### `GET /v1/games/:id/snapshot`
@@ -581,7 +594,9 @@ Response:
 - Status: `200` while the process can serve its event loop
 
 ```ts
-{ status: 'ok' }
+{
+  status: 'ok';
+}
 ```
 
 ### `GET /readyz`
@@ -596,7 +611,7 @@ Response:
   deps: {
     db: 'up' | 'down';
     redis: 'up' | 'down';
-  };
+  }
 }
 ```
 
@@ -608,16 +623,16 @@ Response:
 
 ## 9. HTTP status mapping
 
-| Condition | Status |
-|---|---:|
-| Invalid payload/header | `400` |
-| Unauthorized/revoked/expired | `401` |
-| Authenticated non-member | `403` |
-| Not found | `404` |
-| Idempotency key conflict/stale version/game already ended | `409` |
-| Rate limited | `429` |
-| Dependency/draining | `503` |
-| Unexpected safe failure | `500` |
+| Condition                                                 | Status |
+| --------------------------------------------------------- | -----: |
+| Invalid payload/header                                    |  `400` |
+| Unauthorized/revoked/expired                              |  `401` |
+| Authenticated non-member                                  |  `403` |
+| Not found                                                 |  `404` |
+| Idempotency key conflict/stale version/game already ended |  `409` |
+| Rate limited                                              |  `429` |
+| Dependency/draining                                       |  `503` |
+| Unexpected safe failure                                   |  `500` |
 
 ## 10. Reliability and ordering
 

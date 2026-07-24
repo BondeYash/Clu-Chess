@@ -1,0 +1,2 @@
+-- Phase 1 intentionally establishes an empty, deployable migration baseline.
+-- Durable application tables and constraints are introduced in Phase 2.
