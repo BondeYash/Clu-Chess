@@ -306,18 +306,18 @@ Make PostgreSQL capable of rejecting invalid durable state even when two app ins
 
 #### Prisma models and migrations
 
-- [ ] Create models and migrations for:
+- [x] Create models and migrations for:
   - `guest_sessions`;
   - `games`;
   - `game_players`;
   - `moves`;
   - the Phase 0 durable active-game mechanism;
   - any approved idempotency records that must survive Redis loss.
-- [ ] Add the approved `match_id` or equivalent crash-safe game-allocation key.
-- [ ] Add durable clock timing fields from Gate C.
-- [ ] Add foreign keys and deletion behavior.
-- [ ] Add database checks for valid color, slot, version, ply, status/result, termination, and clock values.
-- [ ] Add uniqueness for:
+- [x] Add the approved `match_id` or equivalent crash-safe game-allocation key.
+- [x] Add durable clock timing fields from Gate C.
+- [x] Add foreign keys and deletion behavior.
+- [x] Add database checks for valid color, slot, version, ply, status/result, termination, and clock values.
+- [x] Add uniqueness for:
   - case-insensitive display name;
   - match allocation key;
   - `(game_id, color)`;
@@ -326,45 +326,51 @@ Make PostgreSQL capable of rejecting invalid durable state even when two app ins
   - `(game_id, client_move_id)`;
   - `(game_id, ply_number)`;
   - one active assignment per guest.
-- [ ] Implement the approved exactly-two-player guarantee or document why the atomic creation transaction plus other database constraints is the selected enforcement.
-- [ ] Add indexes for active-game recovery, expiry cleanup, ordered moves, and active status scans.
-- [ ] Use raw SQL migrations for generated columns, partial/expression indexes, row-level checks, deferred constraints, or triggers Prisma cannot express.
+- [x] Implement the approved exactly-two-player guarantee or document why the atomic creation transaction plus other database constraints is the selected enforcement.
+- [x] Add indexes for active-game recovery, expiry cleanup, ordered moves, and active status scans.
+- [x] Use raw SQL migrations for generated columns, partial/expression indexes, row-level checks, deferred constraints, or triggers Prisma cannot express.
 
 #### Persistence layer
 
-- [ ] Implement `PrismaService` lifecycle and connection management.
-- [ ] Add repository interfaces owned by their domain modules.
-- [ ] Add transaction helpers for:
+- [x] Implement `PrismaService` lifecycle and connection management.
+- [x] Add repository interfaces owned by their domain modules.
+- [x] Add transaction helpers for:
   - `SELECT ... FOR UPDATE`;
   - conditional version updates;
   - unique-conflict classification;
   - retryable database errors.
-- [ ] Map database errors to stable domain errors without leaking SQL details.
-- [ ] Set explicit transaction timeouts and keep move transactions short.
-- [ ] Establish separate runtime and migration role requirements.
+- [x] Map database errors to stable domain errors without leaking SQL details.
+- [x] Set explicit transaction timeouts and keep move transactions short.
+- [x] Establish separate runtime and migration role requirements.
 
 #### Migration safety
 
-- [ ] Add clean-database migration tests.
-- [ ] Add upgrade migration tests from the last released schema once releases begin.
-- [ ] Add a migration status check to CI.
-- [ ] Document expand/contract rules for zero-downtime changes.
-- [ ] Add backup/restore expectations for production PostgreSQL.
+- [x] Add clean-database migration tests.
+- [x] Add upgrade migration tests from the last released schema once releases begin.
+- [x] Add a migration status check to CI.
+- [x] Document expand/contract rules for zero-downtime changes.
+- [x] Add backup/restore expectations for production PostgreSQL.
 
 ### Verification
 
-- [ ] Testcontainers starts a real PostgreSQL instance for integration tests.
-- [ ] Database tests prove each constraint rejects invalid rows.
-- [ ] Concurrent attempts cannot create two active game assignments for one guest.
-- [ ] The same match allocation key cannot create two games.
-- [ ] Duplicate `client_move_id` and duplicate ply values are rejected.
-- [ ] Invalid terminal status/result combinations are rejected.
-- [ ] Migration down/rollback policy is documented; production rollback does not depend on destructive schema reversal.
+- [x] Testcontainers starts a real PostgreSQL instance for integration tests.
+- [x] Database tests prove each constraint rejects invalid rows.
+- [x] Concurrent attempts cannot create two active game assignments for one guest.
+- [x] The same match allocation key cannot create two games.
+- [x] Duplicate `client_move_id` and duplicate ply values are rejected.
+- [x] Invalid terminal status/result combinations are rejected.
+- [x] Migration down/rollback policy is documented; production rollback does not depend on destructive schema reversal.
 
 ### Exit criteria
 
 - PostgreSQL enforces all durable invariants needed by later phases.
 - Transaction and error-classification utilities are tested and ready for the move hot path.
+
+> **Result:** Passed locally with the pinned PostgreSQL 16 and Redis 7
+> containers. Clean and Phase 1 upgrade migrations, Prisma schema drift,
+> least-privilege roles, all durable constraint families, concurrent
+> allocation, transaction utilities, Docker-only integration tests, the
+> non-root production image, and the zero-vulnerability audit all passed.
 
 ---
 

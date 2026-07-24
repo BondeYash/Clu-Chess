@@ -6,21 +6,10 @@ services:
     command:
       - sh
       - -c
-      - npm run prisma:generate && npm run prisma:deploy && npm run test:integration
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - npm run prisma:generate && npm run test:integration
     environment:
-      DATABASE_POOL_MAX: '5'
-      DATABASE_URL: postgresql://cluchess:cluchess_dev@postgres:5432/cluchess?schema=public
-      DRAIN_TIMEOUT_MS: '4000'
-      INSTANCE_ID: integration-test
-      JWT_CLOCK_SKEW_SECONDS: '0'
-      JWT_KID: test-1
-      LOG_LEVEL: silent
-      NODE_ENV: test
-      ORIGIN_ALLOWLIST: http://test.local
-      OTEL_ENABLED: 'false'
-      REDIS_URL: redis://redis:6379
+      TESTCONTAINERS_HOST_OVERRIDE: localhost
+    network_mode: host
+    user: '0:0'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

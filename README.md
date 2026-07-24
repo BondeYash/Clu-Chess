@@ -28,7 +28,8 @@ Run the code-quality and unit-test gate in the development container:
 docker compose run --build --rm app npm run verify
 ```
 
-Run integration tests against isolated PostgreSQL and Redis containers:
+Run integration tests against isolated Testcontainers-managed PostgreSQL and
+Redis containers:
 
 ```bash
 sh scripts/run-integration-tests.sh
@@ -48,4 +49,6 @@ sh scripts/reset-local-docker.sh
 
 See [Architecture.md](Architecture.md), [PLAN.md](PLAN.md), and
 [docs/configuration.md](docs/configuration.md) for the normative design and
-delivery sequence.
+delivery sequence. Database role separation, safe migrations, rollback, and
+restore expectations are in
+[docs/database-operations.md](docs/database-operations.md).

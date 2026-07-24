@@ -22,9 +22,9 @@ That command will:
 7. leave optional edge and observability services disabled until their planned
    hardening phases.
 
-No developer must install PostgreSQL or Redis directly. Phase 1 integration
-tests use isolated Docker Compose services; later datastore suites may use
-Testcontainers while retaining Docker as the only host prerequisite.
+No developer must install PostgreSQL or Redis directly. Datastore integration
+tests use isolated Testcontainers-managed PostgreSQL and Redis containers while
+retaining Docker as the only host prerequisite.
 
 No committed file contains a production secret. Local-only generated files and volumes are ignored by Git.
 
@@ -54,7 +54,8 @@ All duration values use explicit millisecond or second suffixes. Startup validat
 | ----------------------------- | -------------------------- | ------------------------- | --------------------------- |
 | `NODE_ENV`                    | `development`              | `test`                    | `production`                |
 | `PORT`                        | `3000`                     | allocated                 | platform supplied or `3000` |
-| `DATABASE_URL`                | Compose PostgreSQL URL     | Testcontainers URL        | required secret/reference   |
+| `DATABASE_URL`                | Compose runtime-role URL   | Testcontainers URL        | required runtime secret     |
+| `MIGRATION_DATABASE_URL`      | Compose migration-role URL | Testcontainers URL        | migration job secret only   |
 | `DATABASE_POOL_MAX`           | `20`                       | `5`                       | required, initially `20–40` |
 | `DATABASE_TX_TIMEOUT_MS`      | `3000`                     | `3000`                    | required                    |
 | `REDIS_URL`                   | Compose Redis URL          | Testcontainers URL        | required secret/reference   |
@@ -159,9 +160,14 @@ Production deployment will be generated from version-controlled manifests/templa
 
 - managed PostgreSQL and Redis are the only non-containerized runtime dependencies permitted by the architecture;
 - credentials and JWT private keys come from a secret manager and are mounted/injected by the platform;
-- migrations run as a gated job, never in every app replica;
+- migrations run with a separate migration role as a gated job, never in every app replica;
+- app replicas use a least-privilege runtime role without schema mutation rights;
 - `/metrics` is routed only on the internal network;
 - readiness controls load-balancer routing;
 - no operator hand-edits files inside a running container.
 
 Until production infrastructure is selected, Phase 1–12 remain fully reproducible with Docker and require no manually provisioned external service.
+
+See [`database-operations.md`](database-operations.md) for grants,
+expand/contract migration rules, rollback policy, and backup/restore
+expectations.

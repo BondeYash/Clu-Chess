@@ -5,15 +5,16 @@ services:
     image: postgres:16.9-alpine
     environment:
       POSTGRES_DB: cluchess
-      POSTGRES_PASSWORD: cluchess_dev
-      POSTGRES_USER: cluchess
+      POSTGRES_PASSWORD: cluchess_owner_dev
+      POSTGRES_USER: cluchess_owner
       TZ: UTC
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U cluchess -d cluchess']
+      test: ['CMD-SHELL', 'pg_isready -U cluchess_owner -d cluchess']
       interval: 2s
       timeout: 3s
       retries: 20
     volumes:
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
       - postgres-data:/var/lib/postgresql/data
 
   redis:
@@ -50,7 +51,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://cluchess:cluchess_dev@postgres:5432/cluchess?schema=public
+      MIGRATION_DATABASE_URL: postgresql://cluchess_migrator:cluchess_migrator_dev@postgres:5432/cluchess?schema=public
 
   app:
     build:
@@ -70,7 +71,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://cluchess:cluchess_dev@postgres:5432/cluchess?schema=public
+      DATABASE_URL: postgresql://cluchess_runtime:cluchess_runtime_dev@postgres:5432/cluchess?schema=public
       INSTANCE_ID: local-compose
       JWT_KID: local-dev-1
       JWT_PRIVATE_KEY_FILE: /run/secrets/cluchess/jwt-private.pem

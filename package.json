@@ -46,8 +46,8 @@
     "@opentelemetry/resources": "2.10.0",
     "@opentelemetry/sdk-node": "0.221.0",
     "@opentelemetry/semantic-conventions": "1.43.0",
-    "@prisma/adapter-pg": "7.8.0",
-    "@prisma/client": "7.8.0",
+    "@prisma/adapter-pg": "7.9.0",
+    "@prisma/client": "7.9.0",
     "ioredis": "5.11.1",
     "nestjs-pino": "4.6.1",
     "pg": "8.22.0",
@@ -60,6 +60,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@nestjs/cli": "11.0.24",
+    "@testcontainers/postgresql": "12.0.4",
     "@types/express": "5.0.6",
     "@types/node": "24.13.3",
     "@types/pg": "8.20.0",
@@ -68,16 +69,20 @@
     "eslint": "10.7.0",
     "eslint-config-prettier": "10.1.8",
     "prettier": "3.9.6",
-    "prisma": "7.8.0",
+    "prisma": "7.9.0",
     "supertest": "7.2.2",
+    "testcontainers": "12.0.4",
     "typescript": "6.0.3",
     "typescript-eslint": "8.65.0",
     "vitest": "4.1.10"
   },
+  "overrides": {
+    "find-my-way": "9.7.0"
+  },
   "allowScripts": {
-    "@prisma/engines@7.8.0": true,
+    "@prisma/engines@7.9.0": true,
     "esbuild@0.28.1": true,
-    "prisma@7.8.0": true,
+    "prisma@7.9.0": true,
     "protobufjs@7.6.5": true
   }
 }

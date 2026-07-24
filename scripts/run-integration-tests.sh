@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-project_name="cluchess-phase1-test"
+project_name="cluchess-phase2-test"
 
 cleanup() {
   docker compose \

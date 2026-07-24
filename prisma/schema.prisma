@@ -8,3 +8,150 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model GuestSession {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  displayName   String    @map("display_name") @db.Text
+  displayNameCi String    @unique(map: "guest_sessions_display_name_ci_key") @default(dbgenerated()) @map("display_name_ci") @db.Text
+  avatarKey     String    @map("avatar_key") @db.Text
+  currentJti    String?   @map("current_jti") @db.Uuid
+  issuedAt      DateTime  @default(now()) @map("issued_at") @db.Timestamptz(3)
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  gamePlayers      GamePlayer[]
+  activeAssignment ActiveGameAssignment?
+  moves            Move[]
+  sessionCommands  SessionCommand[]
+  gameCommands     GameCommand[]
+
+  @@index([expiresAt], map: "guest_sessions_expires_at_idx")
+  @@map("guest_sessions")
+}
+
+model Game {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  matchId             String    @unique(map: "games_match_id_key") @map("match_id") @db.Uuid
+  mode                String    @default("BLITZ") @db.Text
+  status              String    @default("CREATED") @db.Text
+  initialFen          String    @map("initial_fen") @db.Text
+  currentFen          String    @map("current_fen") @db.Text
+  turnColor           String    @default("w") @map("turn_color") @db.Text
+  pgn                 String    @default("") @db.Text
+  version             Int       @default(0)
+  result              String?   @db.Text
+  termination         String?   @db.Text
+  timeInitialMs       Int       @map("time_initial_ms")
+  incrementMs         Int       @default(0) @map("increment_ms")
+  whiteClockMs        Int       @map("white_clock_ms")
+  blackClockMs        Int       @map("black_clock_ms")
+  turnStartedAt       DateTime? @map("turn_started_at") @db.Timestamptz(3)
+  joinDeadlineAt      DateTime? @map("join_deadline_at") @db.Timestamptz(3)
+  reconnectDeadlineAt DateTime? @map("reconnect_deadline_at") @db.Timestamptz(3)
+  startedAt           DateTime? @map("started_at") @db.Timestamptz(3)
+  endedAt             DateTime? @map("ended_at") @db.Timestamptz(3)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  players     GamePlayer[]
+  assignments ActiveGameAssignment[]
+  moves       Move[]
+  commands    GameCommand[]
+
+  @@index([status, joinDeadlineAt], map: "games_status_join_deadline_at_idx")
+  @@index([status, reconnectDeadlineAt], map: "games_status_reconnect_deadline_at_idx")
+  @@map("games")
+}
+
+model GamePlayer {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gameId               String    @map("game_id") @db.Uuid
+  guestSessionId       String    @map("guest_session_id") @db.Uuid
+  color                String    @db.Text
+  slot                 Int
+  joinedAt             DateTime? @map("joined_at") @db.Timestamptz(3)
+  connectedAt          DateTime? @map("connected_at") @db.Timestamptz(3)
+  disconnectedAt       DateTime? @map("disconnected_at") @db.Timestamptz(3)
+  reconnectGraceEndsAt DateTime? @map("reconnect_grace_ends_at") @db.Timestamptz(3)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  game         Game         @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  guestSession GuestSession @relation(fields: [guestSessionId], references: [id], onDelete: Restrict)
+
+  @@unique([gameId, color], map: "game_players_game_id_color_key")
+  @@unique([gameId, guestSessionId], map: "game_players_game_id_guest_session_id_key")
+  @@unique([gameId, slot], map: "game_players_game_id_slot_key")
+  @@index([guestSessionId], map: "game_players_guest_session_id_idx")
+  @@map("game_players")
+}
+
+model ActiveGameAssignment {
+  guestSessionId String   @id @map("guest_session_id") @db.Uuid
+  gameId         String   @map("game_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  guestSession GuestSession @relation(fields: [guestSessionId], references: [id], onDelete: Restrict)
+  game         Game         @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@index([gameId], map: "active_game_assignments_game_id_idx")
+  @@map("active_game_assignments")
+}
+
+model Move {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gameId           String   @map("game_id") @db.Uuid
+  ply              Int
+  clientMoveId     String   @map("client_move_id") @db.Uuid
+  guestSessionId   String   @map("guest_session_id") @db.Uuid
+  color            String   @db.Text
+  san              String   @db.Text
+  uci              String   @db.Text
+  fenBefore        String   @map("fen_before") @db.Text
+  fenAfter         String   @map("fen_after") @db.Text
+  serverReceivedAt DateTime @map("server_received_at") @db.Timestamptz(3)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  game         Game         @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  guestSession GuestSession @relation(fields: [guestSessionId], references: [id], onDelete: Restrict)
+
+  @@unique([gameId, clientMoveId], map: "moves_game_id_client_move_id_key")
+  @@unique([gameId, ply], map: "moves_game_id_ply_key")
+  @@index([gameId, createdAt], map: "moves_game_id_created_at_idx")
+  @@index([guestSessionId], map: "moves_guest_session_id_idx")
+  @@map("moves")
+}
+
+model SessionCommand {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  commandType     String    @map("command_type") @db.Text
+  idempotencyHash String    @unique(map: "session_commands_idempotency_hash_key") @map("idempotency_hash") @db.Text
+  guestSessionId  String    @map("guest_session_id") @db.Uuid
+  issuedJti       String?   @map("issued_jti") @db.Uuid
+  issuedAt        DateTime? @map("issued_at") @db.Timestamptz(3)
+  expiresAt       DateTime? @map("expires_at") @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  guestSession GuestSession @relation(fields: [guestSessionId], references: [id], onDelete: Restrict)
+
+  @@index([guestSessionId, createdAt], map: "session_commands_guest_session_id_created_at_idx")
+  @@map("session_commands")
+}
+
+model GameCommand {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gameId         String   @map("game_id") @db.Uuid
+  guestSessionId String   @map("guest_session_id") @db.Uuid
+  eventId        String   @map("event_id") @db.Uuid
+  commandType    String   @map("command_type") @db.Text
+  resultVersion  Int      @map("result_version")
+  response       Json     @db.JsonB
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  game         Game         @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  guestSession GuestSession @relation(fields: [guestSessionId], references: [id], onDelete: Restrict)
+
+  @@unique([gameId, eventId], map: "game_commands_game_id_event_id_key")
+  @@index([guestSessionId, createdAt], map: "game_commands_guest_session_id_created_at_idx")
+  @@map("game_commands")
+}
