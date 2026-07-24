@@ -15,7 +15,7 @@
     "clean": "node scripts/clean.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "eslint . --max-warnings=0",
+    "lint": "npm run prisma:generate && eslint . --max-warnings=0",
     "typecheck": "npm run prisma:generate && tsc --noEmit -p tsconfig.json",
     "start": "node --import ./dist/instrumentation.js ./dist/main.js",
     "start:dev": "nest start --watch --no-shell",
