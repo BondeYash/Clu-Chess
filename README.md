@@ -62,3 +62,6 @@ delivery are documented in
 FIFO queueing, durable allocation, failure recovery, and room readiness are
 documented in
 [docs/matchmaking-operations.md](docs/matchmaking-operations.md).
+Authoritative snapshots, move transactions, idempotent recovery, and
+board-driven endings are documented in
+[docs/gameplay-operations.md](docs/gameplay-operations.md).

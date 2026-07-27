@@ -11,8 +11,10 @@ import {
   type GamePlayerRecord,
   type GameRecord,
   type GameRepository,
+  type GameSnapshotRecord,
   type GuestMatchEligibility,
   type MarkGameReady,
+  type StartGameResult,
   type UpdateGameAtVersion,
 } from '../application/ports/game.repository.js';
 import { GameServiceError } from '../domain/game-service.errors.js';
@@ -30,8 +32,17 @@ const allocationInclude = {
   },
 } satisfies Prisma.GameInclude;
 
+const snapshotInclude = {
+  ...allocationInclude,
+  moves: { orderBy: { ply: 'asc' } },
+} satisfies Prisma.GameInclude;
+
 type PersistedAllocation = Prisma.GameGetPayload<{
   include: typeof allocationInclude;
+}>;
+
+type PersistedSnapshot = Prisma.GameGetPayload<{
+  include: typeof snapshotInclude;
 }>;
 
 type AllocationTransactionResult =
@@ -46,6 +57,15 @@ type ReadyTransactionResult =
   | Readonly<{ kind: 'not_player' }>
   | Readonly<{ kind: 'stale'; version: number }>
   | Readonly<{ kind: 'unavailable' }>;
+
+type StartTransactionResult =
+  | Readonly<{
+      allocation: PersistedAllocation;
+      kind: 'found';
+      started: boolean;
+    }>
+  | Readonly<{ kind: 'missing' }>
+  | Readonly<{ kind: 'stale'; version: number }>;
 
 @Injectable()
 export class PrismaGameRepository implements GameRepository {
@@ -105,6 +125,29 @@ export class PrismaGameRepository implements GameRepository {
       where: { matchId },
     });
     return game === null ? null : this.mapAllocation(game);
+  }
+
+  async findSnapshot(gameId: string): Promise<GameSnapshotRecord | null> {
+    const result = await this.transactions.run(async (transaction) => {
+      const game = await transaction.game.findUnique({
+        include: snapshotInclude,
+        where: { id: gameId },
+      });
+      if (game === null) {
+        return null;
+      }
+      const timestamps = await transaction.$queryRaw<
+        readonly Readonly<{ observedAt: Date }>[]
+      >(Prisma.sql`SELECT clock_timestamp() AS "observedAt"`);
+      const observedAt = timestamps[0]?.observedAt;
+      if (observedAt === undefined) {
+        throw new Error('PostgreSQL did not return a snapshot timestamp.');
+      }
+      return { game, observedAt };
+    }, 'RepeatableRead');
+    return result === null
+      ? null
+      : this.mapSnapshot(result.game, result.observedAt);
   }
 
   async findActiveAllocations(
@@ -179,6 +222,32 @@ export class PrismaGameRepository implements GameRepository {
           'GAME_UNAVAILABLE',
           'The game is not waiting for player readiness.',
           false,
+        );
+    }
+  }
+
+  async startIfReady(gameId: string): Promise<StartGameResult> {
+    const result = await this.transactions.run((transaction) =>
+      this.startIfReadyInTransaction(transaction, gameId),
+    );
+    switch (result.kind) {
+      case 'found':
+        return {
+          allocation: this.mapAllocation(result.allocation),
+          started: result.started,
+        };
+      case 'missing':
+        throw new GameServiceError(
+          'GAME_NOT_FOUND',
+          'The requested game does not exist.',
+          false,
+        );
+      case 'stale':
+        throw new GameServiceError(
+          'STALE_GAME_VERSION',
+          'The game version changed while starting.',
+          true,
+          result.version,
         );
     }
   }
@@ -378,6 +447,42 @@ export class PrismaGameRepository implements GameRepository {
       : { allocation: game, kind: 'ready' };
   }
 
+  private async startIfReadyInTransaction(
+    transaction: TransactionClient,
+    gameId: string,
+  ): Promise<StartTransactionResult> {
+    const locked = await this.transactions.lockGameClock(transaction, gameId);
+    if (locked === null) {
+      return { kind: 'missing' };
+    }
+    if (locked.status === 'READY') {
+      const version = await this.transactions.updateGameAtVersion(
+        transaction,
+        gameId,
+        locked.version,
+        {
+          startedAt: locked.observedAt,
+          status: 'IN_PROGRESS',
+          turnStartedAt: locked.observedAt,
+        },
+      );
+      if (version === null) {
+        return { kind: 'stale', version: locked.version };
+      }
+    }
+    const allocation = await transaction.game.findUnique({
+      include: allocationInclude,
+      where: { id: gameId },
+    });
+    return allocation === null
+      ? { kind: 'missing' }
+      : {
+          allocation,
+          kind: 'found',
+          started: locked.status === 'READY',
+        };
+  }
+
   private mapAllocation(game: PersistedAllocation): GameAllocation {
     const players = game.players.map((player) => this.mapPlayer(player));
     const white = players[0];
@@ -420,6 +525,27 @@ export class PrismaGameRepository implements GameRepository {
       turnStartedAt: game.turnStartedAt,
       version: game.version,
       whiteClockMs: game.whiteClockMs,
+    };
+  }
+
+  private mapSnapshot(
+    game: PersistedSnapshot,
+    observedAt: Date,
+  ): GameSnapshotRecord {
+    return {
+      ...this.mapAllocation(game),
+      moves: game.moves.map((move) => ({
+        clientMoveId: move.clientMoveId,
+        color: this.color(move.color),
+        fenAfter: move.fenAfter,
+        fenBefore: move.fenBefore,
+        guestSessionId: move.guestSessionId,
+        ply: move.ply,
+        san: move.san,
+        serverReceivedAt: move.serverReceivedAt,
+        uci: move.uci,
+      })),
+      observedAt,
     };
   }
 

@@ -670,6 +670,8 @@ Match exactly two distinct, present, eligible guests once and create exactly one
 
 ## Phase 7 — Authoritative gameplay transaction
 
+> **Status:** Complete — implemented 2026-07-27
+
 ### Objective
 
 Accept only legal on-turn moves from game members, persist each once, update the authoritative game, and broadcast only committed outcomes.
@@ -678,16 +680,16 @@ Accept only legal on-turn moves from game members, persist each once, update the
 
 #### Snapshot read model
 
-- [ ] Implement an authoritative snapshot query joining game, both players, and ordered moves.
-- [ ] Return a guest-specific view (`you` versus `opponent`) after membership authorization.
-- [ ] Include FEN, turn, version, clocks, status, result, termination, and full ordered move data.
-- [ ] Treat Redis snapshot storage as a disposable cache only.
+- [x] Implement an authoritative snapshot query joining game, both players, and ordered moves.
+- [x] Return a guest-specific view (`you` versus `opponent`) after membership authorization.
+- [x] Include FEN, turn, version, clocks, status, result, termination, and full ordered move data.
+- [x] Treat Redis snapshot storage as a disposable cache only.
 
 #### `move.submit`
 
-- [ ] Validate the envelope, game ID, move coordinates, promotion, `clientMoveId`, and `expectedVersion`.
-- [ ] Resolve the actor only from authenticated socket context.
-- [ ] Execute the exact transaction:
+- [x] Validate the envelope, game ID, move coordinates, promotion, `clientMoveId`, and `expectedVersion`.
+- [x] Resolve the actor only from authenticated socket context.
+- [x] Execute the exact transaction:
   1. begin;
   2. lock the game row;
   3. check for the existing `(game_id, client_move_id)`;
@@ -701,39 +703,48 @@ Accept only legal on-turn moves from game members, persist each once, update the
   11. insert the move row;
   12. update FEN, PGN, turn, clocks, version, and any terminal result with a version guard;
   13. commit.
-- [ ] Classify a raced unique violation as an idempotent retry and fetch the winning move.
-- [ ] Map stale, unauthorized, off-turn, illegal, expired-clock, and dependency errors to stable rejections.
-- [ ] Update/invalidate caches only after commit.
-- [ ] Ack the submitter with the authoritative accepted/rejected result.
-- [ ] Broadcast `move.accepted` after commit.
-- [ ] If the move ends the game, broadcast `game.ended` after the accepted move in deterministic order.
-- [ ] Include `gameVersion`, `clientMoveId`, `ply`, SAN, UCI, FEN, next turn, and clocks.
+- [x] Classify a raced unique violation as an idempotent retry and fetch the winning move.
+- [x] Map stale, unauthorized, off-turn, illegal, expired-clock, and dependency errors to stable rejections.
+- [x] Update/invalidate caches only after commit.
+- [x] Ack the submitter with the authoritative accepted/rejected result.
+- [x] Broadcast `move.accepted` after commit.
+- [x] If the move ends the game, broadcast `game.ended` after the accepted move in deterministic order.
+- [x] Include `gameVersion`, `clientMoveId`, `ply`, SAN, UCI, FEN, next turn, and clocks.
 
 #### Game start and automatic completion
 
-- [ ] Start the game/clocks under the approved READY rule.
-- [ ] Persist `started_at` exactly once.
-- [ ] Broadcast `game.started` after its state transition commits.
-- [ ] Record checkmate and automatic draw outcomes in the move transaction.
-- [ ] Delete durable active-game assignments in the same transaction as a terminal result; clear Redis lookup/state keys after commit.
-- [ ] Make post-terminal repeats return the original terminal state instead of mutating it.
+- [x] Start the game/clocks under the approved READY rule.
+- [x] Persist `started_at` exactly once.
+- [x] Broadcast `game.started` after its state transition commits.
+- [x] Record checkmate and automatic draw outcomes in the move transaction.
+- [x] Delete durable active-game assignments in the same transaction as a terminal result; clear Redis lookup/state keys after commit.
+- [x] Make post-terminal repeats return the original terminal state instead of mutating it.
 
 ### Verification
 
-- [ ] A complete two-client game can run from first move to checkmate.
-- [ ] Every accepted event corresponds to a committed move row and incremented game version.
-- [ ] Duplicate `clientMoveId` produces one row and the same ack.
-- [ ] Same-version simultaneous moves result in exactly one valid acceptance.
-- [ ] Off-turn, stale-version, illegal, non-member, and post-terminal moves are rejected.
-- [ ] A forced crash before commit creates no move; retry succeeds normally.
-- [ ] A forced crash after commit/before broadcast returns the committed move on retry/sync.
-- [ ] Database audits prove no duplicate client move IDs, duplicate plies, ply gaps, or version drift.
+- [x] A complete two-client game can run from first move to checkmate.
+- [x] Every accepted event corresponds to a committed move row and incremented game version.
+- [x] Duplicate `clientMoveId` produces one row and the same ack.
+- [x] Same-version simultaneous moves result in exactly one valid acceptance.
+- [x] Off-turn, stale-version, illegal, non-member, and post-terminal moves are rejected.
+- [x] A forced crash before commit creates no move; retry succeeds normally.
+- [x] A forced crash after commit/before broadcast returns the committed move on retry/sync.
+- [x] Database audits prove no duplicate client move IDs, duplicate plies, ply gaps, or version drift.
 
 ### Exit criteria
 
 - FR-8 and FR-9 are complete.
 - Move-based portions of FR-10 are complete.
 - The commit-before-broadcast and idempotent-retry invariants are proven.
+
+> **Result:** Passed the strict format, lint, type, build, and unit coverage
+> gates plus the complete Docker-backed integration suite. PostgreSQL now
+> serializes every move on the game row, stores the exact accepted response
+> beside the move, advances authoritative clocks and versions, and records
+> board-driven terminal outcomes atomically. Ordered guest snapshots,
+> post-commit two-instance broadcasts, retry/sync recovery, terminal
+> assignment cleanup, concurrent submissions, forced rollback, and a complete
+> checkmate are covered by real PostgreSQL/Redis tests.
 
 ---
 

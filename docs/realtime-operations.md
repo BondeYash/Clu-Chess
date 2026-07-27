@@ -1,6 +1,6 @@
 # Realtime Operations
 
-> **Status:** Implemented through Phase 6
+> **Status:** Implemented through Phase 7
 > **Protocol authority:** [`protocol-v1.md`](protocol-v1.md)
 
 ## Runtime topology
@@ -55,12 +55,12 @@ propagated correlation ID, and is the authoritative response to that caller.
 Unexpected failures are mapped to stable public errors; tokens, raw private
 payloads, Redis URLs, and database details are never included.
 
-The command port handles heartbeat, FIFO queue join/leave, `game.ready`, and
-guest-authorized `game.sync`. Matchmaking publishes `queue.left` and
-`match.found` through personal rooms across replicas. `move.submit` and
-`game.resign` remain validated and rate-limited but return
-`SERVICE_UNAVAILABLE` until Phase 7 installs the authoritative gameplay
-transaction.
+The command port handles heartbeat, FIFO queue join/leave, `game.ready`,
+guest-authorized `game.sync`, and authoritative `move.submit`. Matchmaking
+publishes `queue.left` and `match.found` through personal rooms across
+replicas. Gameplay publishes committed `game.started`, `move.accepted`, and
+board-driven `game.ended` events through game rooms. `game.resign` remains
+validated and rate-limited but returns `SERVICE_UNAVAILABLE` until Phase 8.
 
 ## Presence and heartbeats
 
@@ -99,6 +99,8 @@ presence member, or stream entry as game truth.
 
 Match allocation and readiness recovery details are in
 [`matchmaking-operations.md`](matchmaking-operations.md).
+Move transaction and snapshot recovery details are in
+[`gameplay-operations.md`](gameplay-operations.md).
 
 ## Verification
 

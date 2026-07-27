@@ -12,6 +12,7 @@
 | [`realtime-operations.md`](realtime-operations.md)       | Socket transport, presence, scaling, and recovery   |
 | [`game-domain.md`](game-domain.md)                       | Pure chess, lifecycle, outcome, and clock contracts |
 | [`matchmaking-operations.md`](matchmaking-operations.md) | Queueing, allocation, rollback, and readiness       |
+| [`gameplay-operations.md`](gameplay-operations.md)       | Authoritative moves, snapshots, and board endings   |
 
 ## Phase status
 
@@ -24,5 +25,6 @@
 | Phase 4 — Realtime protocol and presence     | Complete |
 | Phase 5 — Chess and game-domain core         | Complete |
 | Phase 6 — Matchmaking and game allocation    | Complete |
+| Phase 7 — Authoritative gameplay transaction | Complete |
 
 Later phase documents and operational runbooks will be added here as they are completed.

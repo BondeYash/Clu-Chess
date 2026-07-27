@@ -9,7 +9,17 @@ import type {
   GameAllocation,
   GamePlayerRecord,
 } from '../game/application/ports/game.repository.js';
-import { GameRoomService } from '../game/game-room.service.js';
+import type {
+  AcceptedMove,
+  EndedGame,
+  GameplayClock,
+  StartedGame,
+} from '../game/application/ports/gameplay.repository.js';
+import { GameMoveService } from '../game/game-move.service.js';
+import {
+  GameRoomService,
+  type GameSnapshotView,
+} from '../game/game-room.service.js';
 import {
   MatchmakingService,
   type MatchmakingEffects,
@@ -45,6 +55,7 @@ export class MatchmakingRealtimeService
     private readonly config: AppConfigService,
     private readonly games: GameRoomService,
     private readonly matchmaking: MatchmakingService,
+    private readonly moves: GameMoveService,
     private readonly protocol: RealtimeProtocolService,
   ) {
     this.intervals = {
@@ -67,6 +78,8 @@ export class MatchmakingRealtimeService
         return this.readyGame(event, context);
       case 'game.sync':
         return this.syncGame(event, context);
+      case 'move.submit':
+        return this.submitMove(event, context);
       default:
         throw new RealtimeError(
           'SERVICE_UNAVAILABLE',
@@ -142,37 +155,43 @@ export class MatchmakingRealtimeService
   ): Promise<RealtimeCommandResult> {
     await this.games.authorize(event.gameId, context.identity.guestSessionId);
     await context.joinGameRoom(event.gameId);
-    const allocation = await this.games.ready(
+    const result = await this.games.ready(
       event.gameId,
       context.identity.guestSessionId,
       event.gameVersion,
     );
-    return this.snapshotResult(allocation, context.identity.guestSessionId);
+    if (result.started !== null) {
+      this.publishStarted(result.started);
+    }
+    return this.snapshotResult(
+      result.snapshot,
+      context.identity.guestSessionId,
+    );
   }
 
   private async syncGame(
     event: Extract<ClientEventEnvelope, { type: 'game.sync' }>,
     context: RealtimeCommandContext,
   ): Promise<RealtimeCommandResult> {
-    const allocation =
+    const snapshot =
       event.gameId === undefined
         ? await this.games.activeSnapshot(context.identity.guestSessionId)
         : await this.games.snapshot(
             event.gameId,
             context.identity.guestSessionId,
           );
-    await context.joinGameRoom(allocation.game.id);
-    return this.snapshotResult(allocation, context.identity.guestSessionId);
+    await context.joinGameRoom(snapshot.game.id);
+    return this.snapshotResult(snapshot, context.identity.guestSessionId);
   }
 
   private snapshotResult(
-    allocation: GameAllocation,
+    snapshot: GameSnapshotView,
     guestSessionId: string,
   ): RealtimeCommandResult {
-    const you = allocation.players.find(
+    const you = snapshot.players.find(
       (player) => player.guestSessionId === guestSessionId,
     );
-    const opponent = allocation.players.find(
+    const opponent = snapshot.players.find(
       (player) => player.guestSessionId !== guestSessionId,
     );
     if (you === undefined || opponent === undefined) {
@@ -182,24 +201,28 @@ export class MatchmakingRealtimeService
         false,
       );
     }
-    const game = allocation.game;
-    const running =
-      game.status === 'IN_PROGRESS' || game.status === 'RECONNECTING'
-        ? this.wireColor(game.turnColor)
-        : null;
+    const game = snapshot.game;
 
     return {
       gameVersion: game.version,
       payload: {
         clocks: {
-          blackMs: game.blackClockMs,
-          running,
-          serverTime: Date.now(),
-          whiteMs: game.whiteClockMs,
+          blackMs: snapshot.clocks.blackMs,
+          running:
+            snapshot.clocks.running === null
+              ? null
+              : this.wireColor(snapshot.clocks.running),
+          serverTime: snapshot.clocks.observedAt.getTime(),
+          whiteMs: snapshot.clocks.whiteMs,
         },
         currentFen: game.currentFen,
         initialFen: game.initialFen,
-        moves: [],
+        moves: snapshot.moves.map((move) => ({
+          color: this.wireColor(move.color),
+          ply: move.ply,
+          san: move.san,
+          uci: move.uci,
+        })),
         opponent: this.publicPlayer(opponent),
         result: game.result,
         status: game.status,
@@ -208,6 +231,131 @@ export class MatchmakingRealtimeService
         you: this.publicPlayer(you),
       },
       type: 'game.snapshot',
+    };
+  }
+
+  private async submitMove(
+    event: Extract<ClientEventEnvelope, { type: 'move.submit' }>,
+    context: RealtimeCommandContext,
+  ): Promise<RealtimeCommandResult> {
+    const submission = await this.moves.submit({
+      clientMoveId: event.clientMoveId,
+      expectedVersion: event.gameVersion,
+      gameId: event.gameId,
+      guestSessionId: context.identity.guestSessionId,
+      move: {
+        from: event.payload.from,
+        ...(event.payload.promotion === undefined
+          ? {}
+          : { promotion: event.payload.promotion }),
+        to: event.payload.to,
+      },
+    });
+    if (!submission.duplicate) {
+      if (submission.started !== null) {
+        this.publishStarted(submission.started);
+      }
+      this.publishAccepted(submission.accepted);
+      if (submission.ended !== null) {
+        this.publishEnded(submission.ended);
+      }
+    }
+    return {
+      gameVersion: submission.accepted.gameVersion,
+      payload: this.acceptedPayload(submission.accepted),
+      type: 'move.accepted',
+    };
+  }
+
+  private publishStarted(started: StartedGame): void {
+    this.broadcast.toGame(
+      started.gameId,
+      this.protocol.createServerEvent({
+        gameId: started.gameId,
+        gameVersion: started.gameVersion,
+        payload: {
+          clocks: {
+            ...this.wireClocks(started.clocks),
+            running: 'white',
+          },
+          initialFen: started.initialFen,
+          turn: 'white',
+        },
+        type: 'game.started',
+      }),
+    );
+  }
+
+  private publishAccepted(accepted: AcceptedMove): void {
+    this.broadcast.toGame(
+      accepted.gameId,
+      this.protocol.createServerEvent({
+        clientMoveId: accepted.clientMoveId,
+        gameId: accepted.gameId,
+        gameVersion: accepted.gameVersion,
+        payload: this.acceptedPayload(accepted),
+        type: 'move.accepted',
+      }),
+    );
+  }
+
+  private publishEnded(ended: EndedGame): void {
+    this.broadcast.toGame(
+      ended.gameId,
+      this.protocol.createServerEvent({
+        gameId: ended.gameId,
+        gameVersion: ended.gameVersion,
+        payload: {
+          clocks: {
+            ...this.wireClocks(ended.clocks),
+            running: null,
+          },
+          finalFen: ended.finalFen,
+          pgn: ended.pgn,
+          result: ended.result,
+          termination: ended.termination,
+        },
+        type: 'game.ended',
+      }),
+    );
+  }
+
+  private acceptedPayload(accepted: AcceptedMove): {
+    check: boolean;
+    clocks: {
+      blackMs: number;
+      running: 'black' | 'white' | null;
+      serverTime: number;
+      whiteMs: number;
+    };
+    fenAfter: string;
+    ply: number;
+    san: string;
+    turn: 'black' | 'white';
+    uci: string;
+  } {
+    return {
+      check: accepted.check,
+      clocks: this.wireClocks(accepted.clocks),
+      fenAfter: accepted.fenAfter,
+      ply: accepted.ply,
+      san: accepted.san,
+      turn: this.wireColor(accepted.turn),
+      uci: accepted.uci,
+    };
+  }
+
+  private wireClocks(clocks: GameplayClock): {
+    blackMs: number;
+    running: 'black' | 'white' | null;
+    serverTime: number;
+    whiteMs: number;
+  } {
+    return {
+      blackMs: clocks.blackMs,
+      running: clocks.running === null ? null : this.wireColor(clocks.running),
+      serverTime: clocks.observedAt,
+      whiteMs: clocks.whiteMs,
     };
   }
 

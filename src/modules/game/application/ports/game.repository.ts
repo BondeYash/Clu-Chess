@@ -2,6 +2,7 @@ import type {
   GameResult,
   GameStatus,
   GameTermination,
+  GameMove,
   PlayerColor,
 } from '../../domain/game.types.js';
 
@@ -62,6 +63,12 @@ export type GameAllocation = Readonly<{
   players: readonly [GamePlayerRecord, GamePlayerRecord];
 }>;
 
+export type GameSnapshotRecord = GameAllocation &
+  Readonly<{
+    moves: readonly GameMove[];
+    observedAt: Date;
+  }>;
+
 export type GuestMatchEligibility = Readonly<{
   activeGameId: string | null;
   eligible: boolean;
@@ -72,6 +79,11 @@ export type MarkGameReady = Readonly<{
   gameId: string;
   guestSessionId: string;
   observedAt: Date;
+}>;
+
+export type StartGameResult = Readonly<{
+  allocation: GameAllocation;
+  started: boolean;
 }>;
 
 export type UpdateGameAtVersion = Readonly<{
@@ -93,11 +105,13 @@ export interface GameRepository {
   allocate(input: AllocateGame): Promise<GameAllocation>;
   findById(gameId: string): Promise<GameAllocation | null>;
   findByMatchId(matchId: string): Promise<GameAllocation | null>;
+  findSnapshot(gameId: string): Promise<GameSnapshotRecord | null>;
   findActiveAllocations(limit: number): Promise<readonly GameAllocation[]>;
   getGuestMatchEligibility(
     guestSessionId: string,
     observedAt: Date,
   ): Promise<GuestMatchEligibility>;
   markReady(input: MarkGameReady): Promise<GameAllocation>;
+  startIfReady(gameId: string): Promise<StartGameResult>;
   updateAtVersion(input: UpdateGameAtVersion): Promise<GameRecord | null>;
 }

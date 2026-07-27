@@ -4,6 +4,7 @@ import { MatchmakingError } from '../matchmaking/domain/matchmaking.errors.js';
 import { DatabaseError } from '../persistence/database-errors.js';
 import { RealtimeRedisUnavailableError } from './infrastructure/realtime-redis.errors.js';
 import { RealtimeError } from './protocol/realtime.errors.js';
+import type { ProtocolErrorCode } from './protocol/protocol.constants.js';
 import type { ProtocolErrorPayload } from './protocol/protocol.schemas.js';
 
 export interface MappedRealtimeError {
@@ -60,7 +61,7 @@ export class RealtimeErrorMapperService {
         ...(error.authoritativeVersion === undefined
           ? {}
           : { gameVersion: error.authoritativeVersion }),
-        responseType: 'server.error',
+        responseType: error.responseType,
       };
     }
     if (error instanceof DatabaseError) {
@@ -87,19 +88,22 @@ export class RealtimeErrorMapperService {
     };
   }
 
-  private gameErrorCode(
-    error: GameServiceError,
-  ):
-    | 'ALREADY_IN_GAME'
-    | 'GAME_NOT_FOUND'
-    | 'NOT_A_PLAYER'
-    | 'SERVICE_UNAVAILABLE'
-    | 'STALE_GAME_VERSION' {
+  private gameErrorCode(error: GameServiceError): ProtocolErrorCode {
     switch (error.code) {
+      case 'CLOCK_EXPIRED':
+        return 'CLOCK_EXPIRED';
+      case 'GAME_ALREADY_ENDED':
+        return 'GAME_ALREADY_ENDED';
       case 'GAME_NOT_FOUND':
         return 'GAME_NOT_FOUND';
+      case 'IDEMPOTENCY_KEY_REUSED':
+        return 'IDEMPOTENCY_KEY_REUSED';
+      case 'ILLEGAL_MOVE':
+        return 'ILLEGAL_MOVE';
       case 'NOT_A_PLAYER':
         return 'NOT_A_PLAYER';
+      case 'NOT_YOUR_TURN':
+        return 'NOT_YOUR_TURN';
       case 'STALE_GAME_VERSION':
         return 'STALE_GAME_VERSION';
       case 'GUEST_ALREADY_IN_GAME':

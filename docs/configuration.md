@@ -1,6 +1,6 @@
 # CluChess Configuration Contract
 
-> **Status:** Implemented through Phase 6
+> **Status:** Implemented through Phase 7
 > **Goal:** No manual local environment or external-service setup
 
 ## 1. Zero-touch local workflow

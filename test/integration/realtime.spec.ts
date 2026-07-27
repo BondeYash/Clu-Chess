@@ -390,6 +390,8 @@ describe('authenticated realtime gateway', () => {
       type: 'game.snapshot',
     });
 
+    const startedForA = waitForServerEvent(clientA.socket, 'game.started');
+    const startedForB = waitForServerEvent(clientB.socket, 'game.started');
     const readyB = await emitWithAck(
       clientB.socket,
       'game.ready',
@@ -399,10 +401,22 @@ describe('authenticated realtime gateway', () => {
       }),
     );
     expect(readyB).toMatchObject({
-      gameVersion: 1,
+      gameVersion: 2,
       ok: true,
-      payload: { status: 'READY' },
+      payload: { status: 'IN_PROGRESS' },
       type: 'game.snapshot',
+    });
+    expect(await startedForA).toMatchObject({
+      gameId: foundA.gameId,
+      gameVersion: 2,
+      payload: { clocks: { running: 'white' }, turn: 'white' },
+      type: 'game.started',
+    });
+    expect(await startedForB).toMatchObject({
+      gameId: foundA.gameId,
+      gameVersion: 2,
+      payload: { clocks: { running: 'white' }, turn: 'white' },
+      type: 'game.started',
     });
 
     const repeatedReady = await emitWithAck(
@@ -414,9 +428,9 @@ describe('authenticated realtime gateway', () => {
       }),
     );
     expect(repeatedReady).toMatchObject({
-      gameVersion: 1,
+      gameVersion: 2,
       ok: true,
-      payload: { status: 'READY' },
+      payload: { status: 'IN_PROGRESS' },
       type: 'game.snapshot',
     });
 
@@ -438,7 +452,7 @@ describe('authenticated realtime gateway', () => {
       [foundA.gameId],
     );
     expect(readyRows.rows).toEqual([
-      { joinedPlayers: 2, status: 'READY', version: 1 },
+      { joinedPlayers: 2, status: 'IN_PROGRESS', version: 2 },
     ]);
 
     await redis.connection.flushdb();
@@ -451,6 +465,204 @@ describe('authenticated realtime gateway', () => {
       error: { code: 'ALREADY_IN_GAME', retryable: false },
       ok: false,
     });
+  });
+
+  it('broadcasts committed moves and a deterministic checkmate across instances', async () => {
+    const whiteSession = await createSession(serverA);
+    const blackSession = await createSession(appB.getHttpServer() as Server);
+    const allocated = await allocateGame(pool, {
+      guestSessionIds: [whiteSession.guest.id, blackSession.guest.id],
+    });
+    await pool.query(
+      `
+        UPDATE games
+        SET
+          status = 'WAITING_FOR_PLAYERS',
+          join_deadline_at = clock_timestamp() + interval '20 seconds'
+        WHERE id = $1
+      `,
+      [allocated.gameId],
+    );
+    const white = await connectClient(urlA, whiteSession.token);
+    const black = await connectClient(urlB, blackSession.token);
+
+    await emitWithAck(
+      white.socket,
+      'game.ready',
+      envelope('game.ready', {
+        gameId: allocated.gameId,
+        gameVersion: 0,
+      }),
+    );
+    const startedForWhite = waitForServerEvent(white.socket, 'game.started');
+    const startedForBlack = waitForServerEvent(black.socket, 'game.started');
+    const blackReady = await emitWithAck(
+      black.socket,
+      'game.ready',
+      envelope('game.ready', {
+        gameId: allocated.gameId,
+        gameVersion: 0,
+      }),
+    );
+    expect(blackReady).toMatchObject({
+      gameVersion: 2,
+      payload: { status: 'IN_PROGRESS' },
+      type: 'game.snapshot',
+    });
+    await Promise.all([startedForWhite, startedForBlack]);
+
+    const sequence = [
+      { from: 'e2', socket: white.socket, to: 'e4', watcher: black.socket },
+      { from: 'e7', socket: black.socket, to: 'e5', watcher: white.socket },
+      { from: 'd1', socket: white.socket, to: 'h5', watcher: black.socket },
+      { from: 'b8', socket: black.socket, to: 'c6', watcher: white.socket },
+      { from: 'f1', socket: white.socket, to: 'c4', watcher: black.socket },
+      { from: 'g8', socket: black.socket, to: 'f6', watcher: white.socket },
+      { from: 'h5', socket: white.socket, to: 'f7', watcher: black.socket },
+    ] as const;
+    let finalEnvelope: Record<string, unknown> | undefined;
+    let finalAck: RealtimeAck | undefined;
+    let endedForWhite: Promise<ServerEventEnvelope> | undefined;
+    let endedForBlack: Promise<ServerEventEnvelope> | undefined;
+
+    for (const [index, move] of sequence.entries()) {
+      const clientMoveId = randomUUID();
+      const command = envelope('move.submit', {
+        clientMoveId,
+        gameId: allocated.gameId,
+        gameVersion: index + 2,
+        payload: { from: move.from, to: move.to },
+      });
+      const received = waitForMatchingServerEvent(
+        move.watcher,
+        'move.accepted',
+        (serverEvent) =>
+          serverEvent.type === 'move.accepted' &&
+          serverEvent.clientMoveId === clientMoveId,
+      );
+      if (index === sequence.length - 1) {
+        endedForWhite = waitForServerEvent(white.socket, 'game.ended');
+        endedForBlack = waitForServerEvent(black.socket, 'game.ended');
+      }
+      const ack = await emitWithAck(move.socket, 'move.submit', command);
+      expect(ack).toMatchObject({
+        gameVersion: index + 3,
+        ok: true,
+        payload: {
+          ply: index + 1,
+          uci: `${move.from}${move.to}`,
+        },
+        type: 'move.accepted',
+      });
+      expect(await received).toMatchObject({
+        clientMoveId,
+        gameId: allocated.gameId,
+        gameVersion: index + 3,
+        payload: { ply: index + 1, uci: `${move.from}${move.to}` },
+        type: 'move.accepted',
+      });
+      finalEnvelope = command;
+      finalAck = ack;
+    }
+
+    if (endedForWhite === undefined || endedForBlack === undefined) {
+      throw new Error('The checkmate event listeners were not registered');
+    }
+    expect(await endedForWhite).toMatchObject({
+      gameId: allocated.gameId,
+      gameVersion: 9,
+      payload: { result: 'white_win', termination: 'checkmate' },
+      type: 'game.ended',
+    });
+    expect(await endedForBlack).toMatchObject({
+      gameId: allocated.gameId,
+      gameVersion: 9,
+      payload: { result: 'white_win', termination: 'checkmate' },
+      type: 'game.ended',
+    });
+    if (finalEnvelope === undefined || finalAck === undefined) {
+      throw new Error('The checkmate command was not submitted');
+    }
+    const replay = await emitWithAck(
+      white.socket,
+      'move.submit',
+      finalEnvelope,
+    );
+    expect(replay).toMatchObject({
+      gameVersion: 9,
+      payload:
+        finalAck.ok && finalAck.type === 'move.accepted'
+          ? finalAck.payload
+          : undefined,
+      type: 'move.accepted',
+    });
+
+    const postTerminal = await emitWithAck(
+      black.socket,
+      'move.submit',
+      envelope('move.submit', {
+        clientMoveId: randomUUID(),
+        gameId: allocated.gameId,
+        gameVersion: 9,
+        payload: { from: 'a7', to: 'a6' },
+      }),
+    );
+    expect(postTerminal).toMatchObject({
+      error: {
+        authoritativeVersion: 9,
+        code: 'GAME_ALREADY_ENDED',
+        retryable: false,
+      },
+      gameVersion: 9,
+      ok: false,
+      type: 'move.rejected',
+    });
+
+    const sync = await emitWithAck(
+      black.socket,
+      'game.sync',
+      envelope('game.sync', { gameId: allocated.gameId, gameVersion: 9 }),
+    );
+    expect(sync).toMatchObject({
+      gameVersion: 9,
+      payload: {
+        clocks: { running: null },
+        moves: sequence.map((move, index) => ({
+          ply: index + 1,
+          uci: `${move.from}${move.to}`,
+        })),
+        result: 'white_win',
+        status: 'COMPLETED',
+        termination: 'checkmate',
+      },
+      type: 'game.snapshot',
+    });
+
+    const audit = await pool.query<{
+      assignments: number;
+      commands: number;
+      moves: number;
+      version: number;
+    }>(
+      `
+        SELECT
+          game.version,
+          count(DISTINCT move.id)::int AS moves,
+          count(DISTINCT command.id)::int AS commands,
+          count(DISTINCT assignment.guest_session_id)::int AS assignments
+        FROM games AS game
+        LEFT JOIN moves AS move ON move.game_id = game.id
+        LEFT JOIN game_commands AS command ON command.game_id = game.id
+        LEFT JOIN active_game_assignments AS assignment
+          ON assignment.game_id = game.id
+        WHERE game.id = $1
+        GROUP BY game.id
+      `,
+      [allocated.gameId],
+    );
+    expect(audit.rows).toEqual([
+      { assignments: 0, commands: 7, moves: 7, version: 9 },
+    ]);
   });
 
   it('returns session.ready when an unscoped sync has no active game', async () => {
@@ -658,6 +870,35 @@ function waitForServerEvent(
         reject(asError(error));
       }
     });
+  });
+}
+
+function waitForMatchingServerEvent(
+  socket: ClientSocket,
+  eventName: string,
+  matches: (event: ServerEventEnvelope) => boolean,
+): Promise<ServerEventEnvelope> {
+  return new Promise<ServerEventEnvelope>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      socket.off(eventName, handler);
+      reject(new Error(`Timed out waiting for matching ${eventName}`));
+    }, 5000);
+    const handler = (event: unknown): void => {
+      try {
+        const parsed = serverEnvelopeSchema.parse(event);
+        if (!matches(parsed)) {
+          return;
+        }
+        clearTimeout(timeout);
+        socket.off(eventName, handler);
+        resolve(parsed);
+      } catch (error) {
+        clearTimeout(timeout);
+        socket.off(eventName, handler);
+        reject(asError(error));
+      }
+    };
+    socket.on(eventName, handler);
   });
 }
 

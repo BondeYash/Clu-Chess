@@ -66,8 +66,10 @@ without changing service contracts.
 `game:{gameId}`. The player's `joined_at` and `connected_at` timestamps are
 persisted transactionally. The game remains `WAITING_FOR_PLAYERS` after the
 first distinct player and changes to `READY` with one version increment only
-after both players are ready. Repeated readiness is idempotent, including a
-retry carrying the pre-transition version.
+after both players are ready. Phase 7 then locks and changes it to
+`IN_PROGRESS` with a second version increment, persists the authoritative
+clock start once, and emits `game.started` after commit. Repeated readiness is
+idempotent, including a retry carrying the pre-transition version.
 
 ## Verification
 
