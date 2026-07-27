@@ -9,6 +9,7 @@ import type { MatchReservation } from '../matchmaking/domain/matchmaking.types.j
 import {
   GAME_REPOSITORY,
   type GameAllocation,
+  type GameAllocationCursor,
   type GameRepository,
   type GuestMatchEligibility,
 } from './application/ports/game.repository.js';
@@ -56,8 +57,11 @@ export class GameAllocationService {
     return this.games.findByMatchId(matchId);
   }
 
-  listActive(limit: number): Promise<readonly GameAllocation[]> {
-    return this.games.findActiveAllocations(limit);
+  listActive(
+    limit: number,
+    cursor?: GameAllocationCursor,
+  ): Promise<readonly GameAllocation[]> {
+    return this.games.findActiveAllocations(limit, cursor);
   }
 
   eligibility(

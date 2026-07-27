@@ -14,6 +14,7 @@
 | [`matchmaking-operations.md`](matchmaking-operations.md)       | Queueing, allocation, rollback, and readiness       |
 | [`gameplay-operations.md`](gameplay-operations.md)             | Authoritative moves, snapshots, and board endings   |
 | [`game-lifecycle-operations.md`](game-lifecycle-operations.md) | Deadlines, absence, and non-move endings            |
+| [`recovery-operations.md`](recovery-operations.md)             | Recovery, reconciliation, and dependency failures   |
 
 ## Phase status
 
@@ -28,5 +29,6 @@
 | Phase 6 — Matchmaking and game allocation    | Complete |
 | Phase 7 — Authoritative gameplay transaction | Complete |
 | Phase 8 — Clocks and non-move terminal paths | Complete |
+| Phase 9 — Recovery and dependency failure    | Complete |
 
 Later phase documents and operational runbooks will be added here as they are completed.

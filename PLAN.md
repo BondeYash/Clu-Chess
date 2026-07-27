@@ -834,16 +834,16 @@ Make authoritative recovery the normal answer to refreshes, reconnects, missed e
 
 #### Recovery APIs and events
 
-- [ ] Implement `GET /v1/games/active` using PostgreSQL truth, with Redis as an optional cache.
-- [ ] Implement `GET /v1/games/:id/snapshot` with membership authorization.
-- [ ] Implement WS `game.sync`, accepting an optional known game/version under the approved contract.
-- [ ] Rejoin the authorized socket to `game:{gameId}`.
-- [ ] Return the full snapshot when connection-state recovery is unavailable or the client's version is not current.
-- [ ] Refresh presence, active-game cache, snapshot cache, and grace state after authoritative reads.
+- [x] Implement `GET /v1/games/active` using PostgreSQL truth, with Redis as an optional cache.
+- [x] Implement `GET /v1/games/:id/snapshot` with membership authorization.
+- [x] Implement WS `game.sync`, accepting an optional known game/version under the approved contract.
+- [x] Rejoin the authorized socket to `game:{gameId}`.
+- [x] Return the full snapshot when connection-state recovery is unavailable or the client's version is not current.
+- [x] Refresh presence, active-game cache, snapshot cache, and grace state after authoritative reads.
 
 #### Reconciliation
 
-- [ ] Implement idempotent startup and periodic reconciliation for:
+- [x] Implement idempotent startup and periodic reconciliation for:
   - stale queue members;
   - guests stuck in `RESERVED`;
   - database games committed before Redis finalization;
@@ -853,50 +853,59 @@ Make authoritative recovery the normal answer to refreshes, reconnects, missed e
   - overdue clock deadlines;
   - overdue disconnect grace;
   - expired sessions eligible for cleanup.
-- [ ] Bound scan sizes and use indexed database queries/cursors.
-- [ ] Add metrics and structured logs for every repair and failure.
-- [ ] Ensure two reconcilers can inspect the same item without double-mutating it.
+- [x] Bound scan sizes and use indexed database queries/cursors.
+- [x] Add metrics and structured logs for every repair and failure.
+- [x] Ensure two reconcilers can inspect the same item without double-mutating it.
 
 #### Dependency degradation
 
-- [ ] Redis unavailable:
+- [x] Redis unavailable:
   - fail matchmaking commands with retryable `SERVICE_UNAVAILABLE`;
   - bypass snapshot cache;
   - keep durable game commands operating when their correctness does not require Redis;
   - report readiness according to the approved production policy;
   - restore ephemeral state on recovery.
-- [ ] PostgreSQL unavailable:
+- [x] PostgreSQL unavailable:
   - reject all durable mutations;
   - never ack a move or terminal result as accepted;
   - preserve process liveness but fail readiness;
   - give clients retry guidance.
-- [ ] Adapter/fan-out unavailable:
+- [x] Adapter/fan-out unavailable:
   - keep local delivery;
   - rely on ack/version gaps/sync for convergence;
   - expose degradation metrics.
 
 #### Client reliability support
 
-- [ ] Ensure all command acks can be retried with the same identifier.
-- [ ] Ensure server events contain monotonic version information where applicable.
-- [ ] Return enough information for clients to detect a version gap and request sync.
+- [x] Ensure all command acks can be retried with the same identifier.
+- [x] Ensure server events contain monotonic version information where applicable.
+- [x] Return enough information for clients to detect a version gap and request sync.
 
 ### Verification
 
-- [ ] Refresh restores the same active game and snapshot.
-- [ ] Reconnect to another instance restores membership, presence, clock, and board.
-- [ ] Reconnect inside grace resumes; outside grace returns the terminal snapshot.
-- [ ] Deleting all documented Redis application keys does not lose a committed game or move.
-- [ ] Killing Redis pauses matchmaking but preserves durable game correctness.
-- [ ] Killing PostgreSQL causes closed move rejection and zero fabricated accepted events.
-- [ ] Crash-window tests cover before commit, after commit/before emit, and after game creation/before Redis finalize.
-- [ ] Reconciliation repairs every documented drift scenario.
+- [x] Refresh restores the same active game and snapshot.
+- [x] Reconnect to another instance restores membership, presence, clock, and board.
+- [x] Reconnect inside grace resumes; outside grace returns the terminal snapshot.
+- [x] Deleting all documented Redis application keys does not lose a committed game or move.
+- [x] Killing Redis pauses matchmaking but preserves durable game correctness.
+- [x] Killing PostgreSQL causes closed move rejection and zero fabricated accepted events.
+- [x] Crash-window tests cover before commit, after commit/before emit, and after game creation/before Redis finalize.
+- [x] Reconciliation repairs every documented drift scenario.
 
 ### Exit criteria
 
 - FR-11 and FR-13 are complete.
 - Redis can be treated as disposable for recovery correctness.
 - All §23 failure scenarios in `Architecture.md` have executable tests or a documented operational test.
+
+> **Result:** Passed the strict static, unit, production-build, and
+> Docker-backed recovery/failure gates. HTTP and WS recovery now share one
+> PostgreSQL-authoritative snapshot path; bounded leaderless jobs reconstruct
+> active-game, state, snapshot, grace, matchmaking, deadline, revocation, and
+> cleanup state. Redis loss pauses coordination without losing durable play,
+> PostgreSQL loss rejects mutations closed, adapter loss retains local
+> delivery, and structured Prometheus evidence plus Docker failure drills cover
+> the recovery catalog.
 
 ---
 

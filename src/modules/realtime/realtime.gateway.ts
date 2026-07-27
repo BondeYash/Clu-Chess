@@ -232,6 +232,19 @@ export class RealtimeGateway
       };
     }
 
+    if (event.type === 'game.sync') {
+      await Promise.allSettled([
+        this.presence.refresh(
+          identity.guestSessionId,
+          this.requiredSocketMember(socket),
+        ),
+        this.connections.refresh(
+          this.requiredAddressHash(socket),
+          this.requiredSocketMember(socket),
+        ),
+      ]);
+    }
+
     if (event.type === 'game.sync' && event.gameId === undefined) {
       const activeGameId = await this.activeGames.findActiveGameId(
         identity.guestSessionId,

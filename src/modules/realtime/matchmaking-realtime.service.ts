@@ -5,6 +5,7 @@ import {
   type OnApplicationShutdown,
 } from '@nestjs/common';
 import { AppConfigService } from '../../common/config/app-config.service.js';
+import { MetricsService } from '../../common/metrics/metrics.service.js';
 import type {
   GameAllocation,
   GamePlayerRecord,
@@ -19,10 +20,9 @@ import { GameDeadlineService } from '../game/game-deadline.service.js';
 import { GameLifecycleDeliveryRegistry } from '../game/game-lifecycle-delivery.registry.js';
 import { GameLifecycleService } from '../game/game-lifecycle.service.js';
 import { GameMoveService } from '../game/game-move.service.js';
-import {
-  GameRoomService,
-  type GameSnapshotView,
-} from '../game/game-room.service.js';
+import { GameRecoveryService } from '../game/game-recovery.service.js';
+import { GameRoomService } from '../game/game-room.service.js';
+import { GameSnapshotPresenter } from '../game/game-snapshot.presenter.js';
 import {
   MatchmakingService,
   type MatchmakingEffects,
@@ -62,10 +62,13 @@ export class MatchmakingRealtimeService
     private readonly deadlines: GameDeadlineService,
     private readonly gameDelivery: GameLifecycleDeliveryRegistry,
     private readonly gameLifecycle: GameLifecycleService,
+    private readonly gameRecovery: GameRecoveryService,
     private readonly games: GameRoomService,
     private readonly matchmaking: MatchmakingService,
+    private readonly metrics: MetricsService,
     private readonly moves: GameMoveService,
     private readonly protocol: RealtimeProtocolService,
+    private readonly snapshots: GameSnapshotPresenter,
   ) {
     this.intervals = {
       drain: config.values.JOB_MATCH_DRAIN_MS,
@@ -197,10 +200,14 @@ export class MatchmakingRealtimeService
     if (result.started !== null) {
       this.publishStarted(result.started);
     }
-    return this.snapshotResult(
-      result.snapshot,
-      context.identity.guestSessionId,
-    );
+    return {
+      gameVersion: result.snapshot.game.version,
+      payload: this.snapshots.present(
+        result.snapshot,
+        context.identity.guestSessionId,
+      ),
+      type: 'game.snapshot',
+    };
   }
 
   private async syncGame(
@@ -209,62 +216,18 @@ export class MatchmakingRealtimeService
   ): Promise<RealtimeCommandResult> {
     const snapshot =
       event.gameId === undefined
-        ? await this.games.activeSnapshot(context.identity.guestSessionId)
-        : await this.games.snapshot(
+        ? await this.gameRecovery.activeSnapshot(
+            context.identity.guestSessionId,
+          )
+        : await this.gameRecovery.snapshot(
             event.gameId,
             context.identity.guestSessionId,
           );
-    await context.joinGameRoom(snapshot.game.id);
-    await this.deadlines.scheduleGame(snapshot.game.id);
-    return this.snapshotResult(snapshot, context.identity.guestSessionId);
-  }
-
-  private snapshotResult(
-    snapshot: GameSnapshotView,
-    guestSessionId: string,
-  ): RealtimeCommandResult {
-    const you = snapshot.players.find(
-      (player) => player.guestSessionId === guestSessionId,
-    );
-    const opponent = snapshot.players.find(
-      (player) => player.guestSessionId !== guestSessionId,
-    );
-    if (you === undefined || opponent === undefined) {
-      throw new RealtimeError(
-        'NOT_A_PLAYER',
-        'The authenticated guest is not a game member.',
-        false,
-      );
-    }
-    const game = snapshot.game;
-
+    await context.joinGameRoom(snapshot.gameId);
+    await this.deadlines.scheduleGame(snapshot.gameId);
     return {
-      gameVersion: game.version,
-      payload: {
-        clocks: {
-          blackMs: snapshot.clocks.blackMs,
-          running:
-            snapshot.clocks.running === null
-              ? null
-              : this.wireColor(snapshot.clocks.running),
-          serverTime: snapshot.clocks.observedAt.getTime(),
-          whiteMs: snapshot.clocks.whiteMs,
-        },
-        currentFen: game.currentFen,
-        initialFen: game.initialFen,
-        moves: snapshot.moves.map((move) => ({
-          color: this.wireColor(move.color),
-          ply: move.ply,
-          san: move.san,
-          uci: move.uci,
-        })),
-        opponent: this.publicPlayer(opponent),
-        result: game.result,
-        status: game.status,
-        termination: game.termination,
-        turn: this.wireColor(game.turnColor),
-        you: this.publicPlayer(you),
-      },
+      gameVersion: snapshot.gameVersion,
+      payload: snapshot.payload,
       type: 'game.snapshot',
     };
   }
@@ -474,20 +437,6 @@ export class MatchmakingRealtimeService
     this.broadcast.toGuest(player.guestSessionId, matchFound);
   }
 
-  private publicPlayer(player: GamePlayerRecord): {
-    avatar: string;
-    color: 'black' | 'white';
-    connected: boolean;
-    name: string;
-  } {
-    return {
-      avatar: player.avatarKey,
-      color: this.wireColor(player.color),
-      connected: player.connectedAt !== null,
-      name: player.displayName,
-    };
-  }
-
   private schedule(
     name: JobName,
     work: () => Promise<MatchmakingEffects>,
@@ -516,13 +465,34 @@ export class MatchmakingRealtimeService
         effects.removed.length +
         effects.requeued.length;
       if (changed > 0) {
+        this.metrics.increment(
+          'cluchess_reconciliation_repairs_total',
+          'Reconciliation repairs by job and kind.',
+          { job: `matchmaking_${name}`, kind: 'effect' },
+          changed,
+        );
         this.logger.log({
           changed,
           durationMs: Math.round(performance.now() - startedAt),
           job: name,
         });
       }
+      this.metrics.increment(
+        'cluchess_reconciliation_runs_total',
+        'Reconciliation job runs by job and outcome.',
+        { job: `matchmaking_${name}`, outcome: 'success' },
+      );
     } catch {
+      this.metrics.increment(
+        'cluchess_cleanup_failures_total',
+        'Background cleanup and reconciliation failures by job.',
+        { job: `matchmaking_${name}` },
+      );
+      this.metrics.increment(
+        'cluchess_reconciliation_runs_total',
+        'Reconciliation job runs by job and outcome.',
+        { job: `matchmaking_${name}`, outcome: 'failure' },
+      );
       this.logger.warn({
         durationMs: Math.round(performance.now() - startedAt),
         job: name,

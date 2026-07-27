@@ -37,6 +37,19 @@ describe('database error classification', () => {
     expect(toDatabaseError(stable)).toBe(stable);
   });
 
+  it('treats expired transaction timeouts as retryable unavailability', () => {
+    expect(
+      toDatabaseError(
+        new Error(
+          'Interactive transaction failed: the timeout for this transaction was exceeded',
+        ),
+      ),
+    ).toMatchObject({
+      kind: 'unavailable',
+      retryable: true,
+    });
+  });
+
   it('uses a non-retryable unknown category for unrecognized failures', () => {
     expect(toDatabaseError(new Error('unexpected'))).toMatchObject({
       kind: 'unknown',

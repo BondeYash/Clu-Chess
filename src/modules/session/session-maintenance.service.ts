@@ -6,6 +6,7 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { AppConfigService } from '../../common/config/app-config.service.js';
+import { MetricsService } from '../../common/metrics/metrics.service.js';
 import {
   GUEST_SESSION_REPOSITORY,
   type GuestSessionRepository,
@@ -32,6 +33,7 @@ export class SessionMaintenanceService
     @Inject(GUEST_SESSION_REPOSITORY)
     private readonly repository: GuestSessionRepository,
     private readonly revocations: SessionRevocationService,
+    private readonly metrics: MetricsService,
     config: AppConfigService,
   ) {
     this.batchSize = config.values.JOB_BATCH_SIZE;
@@ -83,11 +85,27 @@ export class SessionMaintenanceService
     try {
       const deletedCount = await this.cleanupExpired(new Date());
       if (deletedCount > 0) {
+        this.metrics.increment(
+          'cluchess_reconciliation_repairs_total',
+          'Reconciliation repairs by job and kind.',
+          { job: 'session_cleanup', kind: 'expired_session' },
+          deletedCount,
+        );
         this.logger.log(
           `Cleaned up ${String(deletedCount)} expired guest sessions`,
         );
       }
+      this.metrics.increment(
+        'cluchess_reconciliation_runs_total',
+        'Reconciliation job runs by job and outcome.',
+        { job: 'session_cleanup', outcome: 'success' },
+      );
     } catch {
+      this.metrics.increment(
+        'cluchess_cleanup_failures_total',
+        'Background cleanup and reconciliation failures by job.',
+        { job: 'session_cleanup' },
+      );
       this.logger.warn('Expired session cleanup could not be completed');
     } finally {
       this.cleanupRunning = false;
@@ -119,7 +137,17 @@ export class SessionMaintenanceService
     this.reconciliationRunning = true;
     try {
       await this.reconcileRevocations(new Date());
+      this.metrics.increment(
+        'cluchess_reconciliation_runs_total',
+        'Reconciliation job runs by job and outcome.',
+        { job: 'session_revocation', outcome: 'success' },
+      );
     } catch {
+      this.metrics.increment(
+        'cluchess_cleanup_failures_total',
+        'Background cleanup and reconciliation failures by job.',
+        { job: 'session_revocation' },
+      );
       this.logger.warn(
         'Session revocation reconciliation could not be completed',
       );

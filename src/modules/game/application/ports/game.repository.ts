@@ -42,8 +42,14 @@ export type GameRecord = Readonly<{
   timeInitialMs: number;
   turnColor: PlayerColor;
   turnStartedAt: Date | null;
+  updatedAt: Date;
   version: number;
   whiteClockMs: number;
+}>;
+
+export type GameAllocationCursor = Readonly<{
+  id: string;
+  updatedAt: Date;
 }>;
 
 export type AllocateGame = Readonly<{
@@ -108,7 +114,10 @@ export interface GameRepository {
   findById(gameId: string): Promise<GameAllocation | null>;
   findByMatchId(matchId: string): Promise<GameAllocation | null>;
   findSnapshot(gameId: string): Promise<GameSnapshotRecord | null>;
-  findActiveAllocations(limit: number): Promise<readonly GameAllocation[]>;
+  findActiveAllocations(
+    limit: number,
+    cursor?: GameAllocationCursor,
+  ): Promise<readonly GameAllocation[]>;
   getGuestMatchEligibility(
     guestSessionId: string,
     observedAt: Date,

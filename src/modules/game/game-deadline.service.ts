@@ -5,6 +5,7 @@ import {
   type OnApplicationShutdown,
 } from '@nestjs/common';
 import { AppConfigService } from '../../common/config/app-config.service.js';
+import { MetricsService } from '../../common/metrics/metrics.service.js';
 import { GameLifecycleService } from './game-lifecycle.service.js';
 
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
@@ -23,6 +24,7 @@ export class GameDeadlineService
   constructor(
     config: AppConfigService,
     private readonly lifecycle: GameLifecycleService,
+    private readonly metrics: MetricsService,
   ) {
     this.intervalMs = config.values.JOB_DEADLINE_SWEEP_MS;
   }
@@ -87,7 +89,30 @@ export class GameDeadlineService
       for (const gameId of gameIds) {
         await this.adjudicateAndReschedule(gameId);
       }
+      this.metrics.increment(
+        'cluchess_reconciliation_runs_total',
+        'Reconciliation job runs by job and outcome.',
+        { job: 'game_deadline', outcome: 'success' },
+      );
+      if (gameIds.length > 0) {
+        this.metrics.increment(
+          'cluchess_reconciliation_repairs_total',
+          'Reconciliation repairs by job and kind.',
+          { job: 'game_deadline', kind: 'due_game' },
+          gameIds.length,
+        );
+      }
     } catch {
+      this.metrics.increment(
+        'cluchess_cleanup_failures_total',
+        'Background cleanup and reconciliation failures by job.',
+        { job: 'game_deadline' },
+      );
+      this.metrics.increment(
+        'cluchess_reconciliation_runs_total',
+        'Reconciliation job runs by job and outcome.',
+        { job: 'game_deadline', outcome: 'failure' },
+      );
       this.logger.warn('Authoritative game deadline sweep failed');
     } finally {
       this.runningSweep = false;

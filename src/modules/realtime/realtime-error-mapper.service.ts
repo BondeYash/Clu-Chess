@@ -67,13 +67,9 @@ export class RealtimeErrorMapperService {
     if (error instanceof DatabaseError) {
       return {
         error: {
-          code:
-            error.kind === 'unknown' ? 'INTERNAL_ERROR' : 'SERVICE_UNAVAILABLE',
-          message:
-            error.kind === 'unknown'
-              ? 'Realtime request could not be completed'
-              : 'Realtime service is temporarily unavailable',
-          retryable: error.retryable,
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Realtime service is temporarily unavailable',
+          retryable: true,
         },
         responseType: 'server.error',
       };

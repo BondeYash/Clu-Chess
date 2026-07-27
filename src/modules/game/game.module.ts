@@ -11,7 +11,10 @@ import { GameEphemeralStateService } from './game-ephemeral-state.service.js';
 import { GameLifecycleDeliveryRegistry } from './game-lifecycle-delivery.registry.js';
 import { GameLifecycleService } from './game-lifecycle.service.js';
 import { GameMoveService } from './game-move.service.js';
+import { GameReconciliationService } from './game-reconciliation.service.js';
+import { GameRecoveryService } from './game-recovery.service.js';
 import { GameRoomService } from './game-room.service.js';
+import { GameSnapshotPresenter } from './game-snapshot.presenter.js';
 import { PrismaGameLifecycleRepository } from './infrastructure/prisma-game-lifecycle.repository.js';
 import { PrismaGameRepository } from './infrastructure/prisma-game.repository.js';
 import { PrismaGameplayRepository } from './infrastructure/prisma-gameplay.repository.js';
@@ -23,7 +26,10 @@ import { PrismaGameplayRepository } from './infrastructure/prisma-gameplay.repos
     GameLifecycleDeliveryRegistry,
     GameLifecycleService,
     GameMoveService,
+    GameRecoveryService,
+    GameReconciliationService,
     GameRoomService,
+    GameSnapshotPresenter,
   ],
   imports: [ChessModule, PersistenceModule, PresenceModule],
   providers: [
@@ -33,7 +39,10 @@ import { PrismaGameplayRepository } from './infrastructure/prisma-gameplay.repos
     GameLifecycleDeliveryRegistry,
     GameLifecycleService,
     GameMoveService,
+    GameRecoveryService,
+    GameReconciliationService,
     GameRoomService,
+    GameSnapshotPresenter,
     PrismaGameLifecycleRepository,
     PrismaGameRepository,
     PrismaGameplayRepository,

@@ -45,7 +45,7 @@ export class GameLifecycleService {
         throw new GameServiceError(
           'DEPENDENCY_UNAVAILABLE',
           'The authoritative game store is temporarily unavailable.',
-          error.retryable,
+          true,
         );
       }
       throw error;

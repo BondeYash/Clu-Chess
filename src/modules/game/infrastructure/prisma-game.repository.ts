@@ -8,6 +8,7 @@ import type {
 import {
   type AllocateGame,
   type GameAllocation,
+  type GameAllocationCursor,
   type GamePlayerRecord,
   type GameRecord,
   type GameRepository,
@@ -20,6 +21,7 @@ import {
 import { GameServiceError } from '../domain/game-service.errors.js';
 import { Prisma } from '../../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
+import { toDatabaseError } from '../../persistence/database-errors.js';
 import {
   TransactionService,
   type TransactionClient,
@@ -112,18 +114,28 @@ export class PrismaGameRepository implements GameRepository {
   }
 
   async findById(gameId: string): Promise<GameAllocation | null> {
-    const game = await this.prisma.game.findUnique({
-      include: allocationInclude,
-      where: { id: gameId },
-    });
+    let game: PersistedAllocation | null;
+    try {
+      game = await this.prisma.game.findUnique({
+        include: allocationInclude,
+        where: { id: gameId },
+      });
+    } catch (error) {
+      throw toDatabaseError(error);
+    }
     return game === null ? null : this.mapAllocation(game);
   }
 
   async findByMatchId(matchId: string): Promise<GameAllocation | null> {
-    const game = await this.prisma.game.findUnique({
-      include: allocationInclude,
-      where: { matchId },
-    });
+    let game: PersistedAllocation | null;
+    try {
+      game = await this.prisma.game.findUnique({
+        include: allocationInclude,
+        where: { matchId },
+      });
+    } catch (error) {
+      throw toDatabaseError(error);
+    }
     return game === null ? null : this.mapAllocation(game);
   }
 
@@ -152,23 +164,45 @@ export class PrismaGameRepository implements GameRepository {
 
   async findActiveAllocations(
     limit: number,
+    cursor?: GameAllocationCursor,
   ): Promise<readonly GameAllocation[]> {
-    const games = await this.prisma.game.findMany({
-      include: allocationInclude,
-      orderBy: { updatedAt: 'asc' },
-      take: limit,
-      where: {
-        status: {
-          in: [
-            'CREATED',
-            'WAITING_FOR_PLAYERS',
-            'READY',
-            'IN_PROGRESS',
-            'RECONNECTING',
+    let games: PersistedAllocation[];
+    try {
+      const activeStatuses = [
+        'CREATED',
+        'WAITING_FOR_PLAYERS',
+        'READY',
+        'IN_PROGRESS',
+        'RECONNECTING',
+      ];
+      games = await this.prisma.game.findMany({
+        include: allocationInclude,
+        orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+        take: limit,
+        where: {
+          AND: [
+            { status: { in: activeStatuses } },
+            ...(cursor === undefined
+              ? []
+              : [
+                  {
+                    OR: [
+                      { updatedAt: { gt: cursor.updatedAt } },
+                      {
+                        AND: [
+                          { updatedAt: cursor.updatedAt },
+                          { id: { gt: cursor.id } },
+                        ],
+                      },
+                    ],
+                  },
+                ]),
           ],
         },
-      },
-    });
+      });
+    } catch (error) {
+      throw toDatabaseError(error);
+    }
     return games.map((game) => this.mapAllocation(game));
   }
 
@@ -176,18 +210,22 @@ export class PrismaGameRepository implements GameRepository {
     guestSessionId: string,
     observedAt: Date,
   ): Promise<GuestMatchEligibility> {
-    const guest = await this.prisma.guestSession.findUnique({
-      include: { activeAssignment: true },
-      where: { id: guestSessionId },
-    });
+    try {
+      const guest = await this.prisma.guestSession.findUnique({
+        include: { activeAssignment: true },
+        where: { id: guestSessionId },
+      });
 
-    return {
-      activeGameId: guest?.activeAssignment?.gameId ?? null,
-      eligible:
-        guest !== null &&
-        guest.revokedAt === null &&
-        guest.expiresAt.getTime() > observedAt.getTime(),
-    };
+      return {
+        activeGameId: guest?.activeAssignment?.gameId ?? null,
+        eligible:
+          guest !== null &&
+          guest.revokedAt === null &&
+          guest.expiresAt.getTime() > observedAt.getTime(),
+      };
+    } catch (error) {
+      throw toDatabaseError(error);
+    }
   }
 
   async markReady(input: MarkGameReady): Promise<GameAllocation> {
@@ -523,6 +561,7 @@ export class PrismaGameRepository implements GameRepository {
       timeInitialMs: game.timeInitialMs,
       turnColor: this.color(game.turnColor),
       turnStartedAt: game.turnStartedAt,
+      updatedAt: game.updatedAt,
       version: game.version,
       whiteClockMs: game.whiteClockMs,
     };

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { MetricsService } from '../../common/metrics/metrics.service.js';
 import type { GuestSocketDisconnectPort } from '../session/application/ports/guest-socket-disconnect.port.js';
 import type { RealtimeDeliveryPort } from './application/ports/realtime-delivery.port.js';
 import { RealtimeRedisService } from './infrastructure/realtime-redis.service.js';
@@ -12,7 +13,10 @@ export class BroadcastService
 {
   private server: RealtimeServer | undefined;
 
-  constructor(private readonly realtimeRedis: RealtimeRedisService) {}
+  constructor(
+    private readonly metrics: MetricsService,
+    private readonly realtimeRedis: RealtimeRedisService,
+  ) {}
 
   bind(server: RealtimeServer): void {
     this.server = server;
@@ -57,9 +61,24 @@ export class BroadcastService
 
   private emit(room: string, event: ServerEventEnvelope): void {
     if (this.realtimeRedis.isReady) {
+      this.metrics.setGauge(
+        'cluchess_realtime_adapter_degraded',
+        'Whether cross-instance realtime fan-out is degraded.',
+        0,
+      );
       this.server?.to(room).emit(event.type, event);
       return;
     }
+    this.metrics.setGauge(
+      'cluchess_realtime_adapter_degraded',
+      'Whether cross-instance realtime fan-out is degraded.',
+      1,
+    );
+    this.metrics.increment(
+      'cluchess_realtime_local_fallback_total',
+      'Room broadcasts delivered locally while the adapter is degraded.',
+      { event: event.type },
+    );
     this.server?.local.to(room).emit(event.type, event);
   }
 }

@@ -16,7 +16,9 @@ PostgreSQL 16 and Redis 7, deploys Prisma migrations, and serves:
 
 - liveness: <http://localhost:3000/healthz>
 - readiness: <http://localhost:3000/readyz>
+- Prometheus metrics: <http://localhost:3000/metrics>
 - anonymous session lifecycle: <http://localhost:3000/v1/session>
+- authenticated recovery: <http://localhost:3000/v1/games/active>
 - authenticated Socket.IO v1 namespace: <http://localhost:3000>
 
 No `.env` file, host Node.js installation, database, cache, or signing-key
@@ -68,3 +70,6 @@ board-driven endings are documented in
 Durable deadlines, resignation, disconnect grace, no-shows, and non-move
 terminal cleanup are documented in
 [docs/game-lifecycle-operations.md](docs/game-lifecycle-operations.md).
+Refresh/reconnect recovery, leaderless drift repair, metrics, and Docker
+dependency drills are documented in
+[docs/recovery-operations.md](docs/recovery-operations.md).

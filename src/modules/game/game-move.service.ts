@@ -31,7 +31,7 @@ export class GameMoveService {
         throw new GameServiceError(
           'DEPENDENCY_UNAVAILABLE',
           'The authoritative game store is temporarily unavailable.',
-          error.retryable,
+          true,
           undefined,
           'move.rejected',
         );

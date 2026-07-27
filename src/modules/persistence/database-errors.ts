@@ -100,7 +100,7 @@ export function toDatabaseError(error: unknown): DatabaseError {
   }
   if (
     (code !== undefined && UNAVAILABLE_CODES.has(code)) ||
-    /query read timeout|connection (?:terminated|closed unexpectedly)/i.test(
+    /query read timeout|connection (?:terminated|closed unexpectedly)|transaction.*(?:expired|timeout)|timed? out|timeout for this transaction/i.test(
       readMessage(error) ?? '',
     ) ||
     error instanceof Prisma.PrismaClientInitializationError
