@@ -1,3 +1,6 @@
+import { unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   assertRuntimeKeyFiles,
@@ -45,6 +48,46 @@ describe('application configuration', () => {
     } catch (error) {
       expect(String(error)).not.toContain('not-a-database-secret');
     }
+  });
+
+  it('requires authenticated TLS datastore URLs in production', () => {
+    expect(() =>
+      parseEnvironment({
+        DATABASE_URL: 'postgresql://runtime:secret@db.internal:5432/cluchess',
+        NODE_ENV: 'production',
+        ORIGIN_ALLOWLIST: 'https://chess.example',
+        REDIS_URL: 'redis://redis.internal:6379',
+      }),
+    ).toThrow('production PostgreSQL');
+
+    expect(() =>
+      parseEnvironment({
+        DATABASE_URL:
+          'postgresql://runtime:secret@db.internal:5432/cluchess?sslmode=verify-full',
+        NODE_ENV: 'production',
+        ORIGIN_ALLOWLIST: 'https://chess.example',
+        REDIS_URL: 'rediss://default:secret@redis.internal:6379',
+      }),
+    ).not.toThrow();
+  });
+
+  it('confines the insecure production exception to local Docker hosts', () => {
+    const localDockerEnvironment = {
+      ALLOW_INSECURE_LOCAL_PRODUCTION: 'true',
+      DATABASE_URL: 'postgresql://runtime:local-only@postgres:5432/cluchess',
+      NODE_ENV: 'production',
+      ORIGIN_ALLOWLIST: 'https://localhost:3443',
+      REDIS_URL: 'redis://redis:6379',
+    };
+
+    expect(() => parseEnvironment(localDockerEnvironment)).not.toThrow();
+    expect(() =>
+      parseEnvironment({
+        ...localDockerEnvironment,
+        DATABASE_URL:
+          'postgresql://runtime:local-only@db.internal:5432/cluchess',
+      }),
+    ).toThrow('isolated local Docker topology');
   });
 
   it('rejects unsafe timing relationships', () => {
@@ -98,5 +141,35 @@ describe('application configuration', () => {
         JWT_PRIVATE_KEY_FILE: '/missing/private.pem',
       });
     }).toThrow('JWT private key file is unavailable');
+  });
+
+  it('requires a non-empty production metrics scrape token', () => {
+    const tokenPath = join(
+      tmpdir(),
+      `cluchess-test-metrics-token-${String(process.pid)}`,
+    );
+    const environment = parseEnvironment({
+      ...process.env,
+      ALLOW_INSECURE_LOCAL_PRODUCTION: 'true',
+      DATABASE_URL: 'postgresql://runtime:local-only@postgres:5432/cluchess',
+      METRICS_BEARER_TOKEN_FILE: tokenPath,
+      NODE_ENV: 'production',
+      ORIGIN_ALLOWLIST: 'https://localhost:3443',
+      REDIS_URL: 'redis://redis:6379',
+    });
+
+    try {
+      writeFileSync(tokenPath, 'short');
+      expect(() => {
+        assertRuntimeKeyFiles(environment);
+      }).toThrow('Metrics bearer token file is unavailable');
+
+      writeFileSync(tokenPath, 'a'.repeat(32));
+      expect(() => {
+        assertRuntimeKeyFiles(environment);
+      }).not.toThrow();
+    } finally {
+      unlinkSync(tokenPath);
+    }
   });
 });

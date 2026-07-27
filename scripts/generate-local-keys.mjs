@@ -1,11 +1,12 @@
 import {
+  chmodSync,
   chownSync,
   existsSync,
   mkdirSync,
   readFileSync,
   writeFileSync,
 } from 'node:fs';
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
 
@@ -16,11 +17,18 @@ const keyId = process.env.JWT_KID ?? 'local-dev-1';
 const privateKeyPath = join(outputDirectory, 'jwt-private.pem');
 const publicDirectory = join(outputDirectory, 'public');
 const publicKeyPath = join(publicDirectory, `${keyId}.pem`);
+const metricsTokenPath = join(outputDirectory, 'metrics-token');
 
 mkdirSync(publicDirectory, { recursive: true });
 
+if (!existsSync(metricsTokenPath)) {
+  writeFileSync(metricsTokenPath, `${randomBytes(32).toString('hex')}\n`, {
+    mode: 0o600,
+  });
+}
+
 if (existsSync(privateKeyPath) && existsSync(publicKeyPath)) {
-  setConfiguredOwnership(privateKeyPath, publicKeyPath);
+  setConfiguredOwnership(privateKeyPath, publicKeyPath, metricsTokenPath);
   process.stdout.write(`Signing keys already exist for kid ${keyId}\n`);
   process.exit(0);
 }
@@ -32,7 +40,7 @@ const { privateKey, publicKey } = generateKeyPairSync('ed25519', {
 
 writeFileSync(privateKeyPath, privateKey, { mode: 0o600 });
 writeFileSync(publicKeyPath, publicKey, { mode: 0o644 });
-setConfiguredOwnership(privateKeyPath, publicKeyPath);
+setConfiguredOwnership(privateKeyPath, publicKeyPath, metricsTokenPath);
 
 if (
   !readFileSync(privateKeyPath, 'utf8').includes('PRIVATE KEY') ||
@@ -43,7 +51,7 @@ if (
 
 process.stdout.write(`Generated Ed25519 signing keys for kid ${keyId}\n`);
 
-function setConfiguredOwnership(privatePath, publicPath) {
+function setConfiguredOwnership(privatePath, publicPath, metricsPath) {
   if (
     process.getuid?.() !== 0 ||
     process.env.KEY_OWNER_UID === undefined ||
@@ -60,4 +68,19 @@ function setConfiguredOwnership(privatePath, publicPath) {
 
   chownSync(privatePath, ownerUid, ownerGid);
   chownSync(publicPath, ownerUid, ownerGid);
+
+  const metricsReaderGid = process.env.METRICS_TOKEN_READER_GID;
+  if (metricsReaderGid === undefined) {
+    chownSync(metricsPath, ownerUid, ownerGid);
+    chmodSync(metricsPath, 0o600);
+    return;
+  }
+
+  const parsedMetricsReaderGid = Number.parseInt(metricsReaderGid, 10);
+  if (!Number.isSafeInteger(parsedMetricsReaderGid)) {
+    throw new Error('Configured metrics reader GID must be numeric');
+  }
+
+  chownSync(metricsPath, ownerUid, parsedMetricsReaderGid);
+  chmodSync(metricsPath, 0o640);
 }

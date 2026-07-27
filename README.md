@@ -30,6 +30,17 @@ Start the production-shaped two-replica/WSS topology:
 docker compose -f compose.multi.yaml up --build
 ```
 
+To start the complete two-replica observability topology (Prometheus, Grafana,
+Tempo, and the OpenTelemetry Collector) with no manual environment setup:
+
+```bash
+docker compose -f compose.multi.yaml -f compose.observability.yaml up --build
+```
+
+Grafana is then available at `http://localhost:3001` and Prometheus at
+`http://localhost:9090`. The public HTTPS edge continues to return `404` for
+`/metrics`; Prometheus uses the generated internal bearer token directly.
+
 It serves the self-signed local HTTPS edge at
 <https://localhost:3443>. PostgreSQL, Redis, migrations, JWT keys, and the TLS
 certificate are all Docker-managed.
@@ -54,6 +65,20 @@ and the complete realtime game flow:
 
 ```bash
 npm run test:multi:docker
+```
+
+Validate Prometheus alerts, alert exercises, dashboards, and the observability
+Compose model:
+
+```bash
+npm run test:observability:docker
+```
+
+Build and scan the exact production image, dependencies, licenses, repository
+secrets, and container configuration:
+
+```bash
+npm run test:security:docker
 ```
 
 Stop the stack while retaining local data:
@@ -94,3 +119,8 @@ Multi-replica routing, graceful drain, rolling restarts, and datastore scaling
 are documented in
 [docs/scaling-operations.md](docs/scaling-operations.md).
 Importable HTTP and Socket.IO Postman assets are in [postman](postman/README.md).
+
+Security controls, telemetry, dashboards, alerts, and response procedures are
+documented in [docs/security-operations.md](docs/security-operations.md),
+[docs/observability-operations.md](docs/observability-operations.md), and
+[docs/observability-runbooks.md](docs/observability-runbooks.md).

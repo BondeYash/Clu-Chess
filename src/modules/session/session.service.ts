@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { AppConfigService } from '../../common/config/app-config.service.js';
+import { TelemetryService } from '../../common/telemetry/telemetry.service.js';
 import { GameLifecycleService } from '../game/game-lifecycle.service.js';
 import {
   IdentityGenerationError,
@@ -62,11 +63,22 @@ export class SessionService {
     private readonly tokens: JwtTokenService,
     private readonly revocations: SessionRevocationService,
     config: AppConfigService,
+    private readonly telemetry: TelemetryService,
   ) {
     this.ttlSeconds = config.values.JWT_TTL_SECONDS;
   }
 
   async create(idempotencyKey: string): Promise<IssuedGuestSession> {
+    return this.telemetry.withSpan(
+      'session.create',
+      { 'cluchess.command': 'session.create' },
+      async () => this.createInternal(idempotencyKey),
+    );
+  }
+
+  private async createInternal(
+    idempotencyKey: string,
+  ): Promise<IssuedGuestSession> {
     const idempotencyHash = this.hashIdempotencyKey(idempotencyKey);
     try {
       const existing = await this.repository.findCommand(idempotencyHash);

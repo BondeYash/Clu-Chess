@@ -1,4 +1,5 @@
 import { Controller, ForbiddenException, Get, Req, Res } from '@nestjs/common';
+import { timingSafeEqual } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { AppConfigService } from '../../common/config/app-config.service.js';
 import { ApplicationLifecycleService } from '../../common/lifecycle/application-lifecycle.service.js';
@@ -21,7 +22,7 @@ export class HealthController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ): string {
-    if (this.config.isProduction && !this.isLoopback(request)) {
+    if (this.config.isProduction && !this.isMetricsAuthorized(request)) {
       throw new ForbiddenException();
     }
     response.type('text/plain; version=0.0.4; charset=utf-8');
@@ -65,6 +66,23 @@ export class HealthController {
       address === '127.0.0.1' ||
       address === '::1' ||
       address === '::ffff:127.0.0.1'
+    );
+  }
+
+  private isMetricsAuthorized(request: Request): boolean {
+    if (this.isLoopback(request)) {
+      return true;
+    }
+    const expected = this.config.metricsBearerToken;
+    const authorization = request.headers.authorization;
+    if (expected === undefined || !authorization?.startsWith('Bearer ')) {
+      return false;
+    }
+    const supplied = Buffer.from(authorization.slice('Bearer '.length));
+    const expectedBuffer = Buffer.from(expected);
+    return (
+      supplied.length === expectedBuffer.length &&
+      timingSafeEqual(supplied, expectedBuffer)
     );
   }
 }

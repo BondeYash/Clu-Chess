@@ -1037,13 +1037,40 @@ describe('authenticated realtime gateway', () => {
       type: 'game.snapshot',
     });
 
-    const renderedMetrics = appA.get(MetricsService).render();
-    expect(renderedMetrics).toContain(
+    const instanceAMetrics = appA.get(MetricsService).render();
+    const endToEndMetrics = [
+      instanceAMetrics,
+      appB.get(MetricsService).render(),
+    ].join('\n');
+    expect(instanceAMetrics).toContain(
       'cluchess_ws_connections{instance="realtime-a"} 0',
     );
-    expect(renderedMetrics).toContain(
+    expect(instanceAMetrics).toContain(
       'cluchess_in_flight_work{instance="realtime-a",kind="realtime"} 0',
     );
+    for (const metric of [
+      'cluchess_active_games',
+      'cluchess_active_rooms',
+      'cluchess_broadcast_latency_seconds_bucket',
+      'cluchess_http_request_duration_seconds_bucket',
+      'cluchess_matches_total',
+      'cluchess_mm_queue_depth',
+      'cluchess_mm_wait_seconds_bucket',
+      'cluchess_move_latency_seconds_bucket',
+      'cluchess_moves_accepted_total',
+      'cluchess_moves_rejected_total',
+      'cluchess_process_restarts_total',
+      'cluchess_reconnect_attempts_total',
+      'cluchess_reconnect_success_ratio',
+      'cluchess_redis_latency_seconds_bucket',
+      'nodejs_eventloop_lag_seconds_bucket',
+      'process_resident_memory_bytes',
+    ]) {
+      expect(endToEndMetrics).toContain(metric);
+    }
+    expect(endToEndMetrics).not.toContain(allocated.gameId);
+    expect(endToEndMetrics).not.toContain(session.guest.id);
+    expect(endToEndMetrics).not.toContain(opponentSession.guest.id);
   });
 
   async function connectClient(

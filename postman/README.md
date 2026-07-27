@@ -10,6 +10,10 @@ Start the normal local stack with `docker compose up --build`, select
 **01 - Session Bootstrap**. The create requests store both guest JWTs locally
 as collection variables.
 
+The operations folder includes every HTTP endpoint, including `/metrics`.
+That request is intentionally local-development only: the production edge
+returns `404`, while internal Prometheus uses the runtime-mounted bearer token.
+
 For realtime testing, create two native **Socket.IO** requests in Postman:
 
 - URL: `{{socketUrl}}`

@@ -1,6 +1,6 @@
 # CluChess Configuration Contract
 
-> **Status:** Implemented through Phase 10
+> **Status:** Implemented through Phase 11
 > **Goal:** No manual local environment or external-service setup
 
 ## 1. Zero-touch local workflow
@@ -79,6 +79,7 @@ All duration values use explicit millisecond or second suffixes. Startup validat
 | `MATCH_STATE_TTL_MS`                   | `3600000`                  | shorter integration value | default `3600000`           |
 | `SNAPSHOT_CACHE_TTL_MS`                | `60000`                    | shorter integration value | default `60000`             |
 | `MAX_WS_BUFFER_BYTES`                  | `8192`                     | `8192`                    | maximum `8192` for v1       |
+| `MAX_SOCKET_SEND_QUEUE_PACKETS`        | `64`                       | `64`                      | bounded, minimum `1`        |
 | `DRAIN_TIMEOUT_MS`                     | `15000`                    | `1000`                    | default `15000`             |
 | `DRAIN_SOCKET_GRACE_MS`                | `500`                      | scenario supplied         | default `500`               |
 | `SOCKET_PING_INTERVAL_MS`              | `25000`                    | scenario supplied         | default `25000`             |
@@ -88,8 +89,11 @@ All duration values use explicit millisecond or second suffixes. Startup validat
 | `LOG_LEVEL`                            | `debug`                    | `warn`                    | `info` unless overridden    |
 | `OTEL_ENABLED`                         | `false`                    | `false`                   | `true`                      |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`          | Compose profile URL        | test collector            | required when OTel enabled  |
+| `OTEL_TRACE_SAMPLE_RATIO`              | `1`                        | `1`                       | `1` with tail sampling      |
 | `METRICS_ENABLED`                      | `true`                     | `true`                    | `true`                      |
+| `METRICS_BEARER_TOKEN_FILE`            | generated volume path      | not required              | mounted secret path         |
 | `INSTANCE_ID`                          | generated hostname         | generated                 | platform/hostname supplied  |
+| `ALLOW_INSECURE_LOCAL_PRODUCTION`      | `false`                    | `false`                   | must remain `false`         |
 
 ## 4. Rate-limit configuration
 
@@ -132,6 +136,7 @@ fingerprint is written to PostgreSQL.
 | `JOB_ACTIVE_DRIFT_MS`          |   `15000` |
 | `JOB_REVOCATION_REBUILD_MS`    |  `300000` |
 | `JOB_SESSION_CLEANUP_MS`       | `3600000` |
+| `JOB_METRICS_REFRESH_MS`       |   `10000` |
 | `JOB_BATCH_SIZE`               |     `100` |
 
 Every value is bounded by validation so an accidental zero/tiny interval cannot busy-loop the process.
@@ -158,6 +163,13 @@ Required relationships:
 - `DRAIN_TIMEOUT_MS` exceeds the database transaction timeout, socket grace,
   and bounded shutdown overhead combined;
 - `DRAIN_SOCKET_GRACE_MS` is less than `DRAIN_TIMEOUT_MS`;
+- production PostgreSQL URLs contain credentials and `sslmode=require`,
+  `verify-ca`, or `verify-full`;
+- production Redis URLs use authenticated `rediss://`;
+- `ALLOW_INSECURE_LOCAL_PRODUCTION=true` is reserved for the isolated
+  production-image Docker smoke topology, is accepted only with the
+  `postgres`/`redis` service hosts and localhost origin, and is forbidden in
+  real deployments;
 - all clocks, grace, and deadline values are positive; increments may be zero.
 
 ## 7. Docker persistence and cleanup
@@ -176,6 +188,8 @@ Production deployment will be generated from version-controlled manifests/templa
 
 - managed PostgreSQL and Redis are the only non-containerized runtime dependencies permitted by the architecture;
 - credentials and JWT private keys come from a secret manager and are mounted/injected by the platform;
+- the metrics bearer token comes from the same secret manager and is mounted as
+  a file readable only by the runtime and Prometheus identities;
 - migrations run with a separate migration role as a gated job, never in every app replica;
 - app replicas use a least-privilege runtime role without schema mutation rights;
 - `/metrics` is routed only on the internal network;

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { MetricsService } from '../../common/metrics/metrics.service.js';
+import { TelemetryService } from '../../common/telemetry/telemetry.service.js';
 import type { GuestSocketDisconnectPort } from '../session/application/ports/guest-socket-disconnect.port.js';
 import type { RealtimeDeliveryPort } from './application/ports/realtime-delivery.port.js';
 import { RealtimeRedisService } from './infrastructure/realtime-redis.service.js';
@@ -16,6 +17,7 @@ export class BroadcastService
   constructor(
     private readonly metrics: MetricsService,
     private readonly realtimeRedis: RealtimeRedisService,
+    private readonly telemetry: TelemetryService,
   ) {}
 
   bind(server: RealtimeServer): void {
@@ -60,25 +62,38 @@ export class BroadcastService
   }
 
   private emit(room: string, event: ServerEventEnvelope): void {
-    if (this.realtimeRedis.isReady) {
-      this.metrics.setGauge(
-        'cluchess_realtime_adapter_degraded',
-        'Whether cross-instance realtime fan-out is degraded.',
-        0,
-      );
-      this.server?.to(room).emit(event.type, event);
-      return;
-    }
-    this.metrics.setGauge(
-      'cluchess_realtime_adapter_degraded',
-      'Whether cross-instance realtime fan-out is degraded.',
-      1,
+    const startedAt = performance.now();
+    this.telemetry.withActiveSpan(
+      'realtime.broadcast',
+      { 'messaging.operation.name': event.type },
+      () => {
+        if (this.realtimeRedis.isReady) {
+          this.metrics.setGauge(
+            'cluchess_realtime_adapter_degraded',
+            'Whether cross-instance realtime fan-out is degraded.',
+            0,
+          );
+          this.server?.to(room).emit(event.type, event);
+          return;
+        }
+        this.metrics.setGauge(
+          'cluchess_realtime_adapter_degraded',
+          'Whether cross-instance realtime fan-out is degraded.',
+          1,
+        );
+        this.metrics.increment(
+          'cluchess_realtime_local_fallback_total',
+          'Room broadcasts delivered locally while the adapter is degraded.',
+          { event: event.type },
+        );
+        this.server?.local.to(room).emit(event.type, event);
+      },
     );
-    this.metrics.increment(
-      'cluchess_realtime_local_fallback_total',
-      'Room broadcasts delivered locally while the adapter is degraded.',
+    this.metrics.observe(
+      'cluchess_broadcast_latency_seconds',
+      'Application room broadcast latency.',
+      (performance.now() - startedAt) / 1000,
       { event: event.type },
     );
-    this.server?.local.to(room).emit(event.type, event);
   }
 }

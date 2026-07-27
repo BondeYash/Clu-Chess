@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppConfigService } from '../../common/config/app-config.service.js';
+import { SafeLogContextService } from '../../common/logging/safe-log-context.service.js';
 import { RedisService } from '../../common/redis/redis.service.js';
 import type { MoveSubmission } from './application/ports/gameplay.repository.js';
 import type { GameAllocation } from './application/ports/game.repository.js';
@@ -36,6 +37,7 @@ export class GameEphemeralStateService {
   constructor(
     config: AppConfigService,
     private readonly redis: RedisService,
+    private readonly safeLogs: SafeLogContextService,
   ) {
     this.snapshotTtlMs = config.values.SNAPSHOT_CACHE_TTL_MS;
     this.stateTtlMs = config.values.MATCH_STATE_TTL_MS;
@@ -73,7 +75,10 @@ export class GameEphemeralStateService {
         ) === 1
       );
     } catch {
-      this.logger.warn({ guestSessionId }, 'Active-game cache cleanup failed');
+      this.logger.warn(
+        { guestRef: this.safeLogs.guestReference(guestSessionId) },
+        'Active-game cache cleanup failed',
+      );
       return false;
     }
   }
@@ -200,7 +205,10 @@ export class GameEphemeralStateService {
       return true;
     } catch {
       this.logger.warn(
-        { gameId, guestSessionId },
+        {
+          gameId,
+          guestRef: this.safeLogs.guestReference(guestSessionId),
+        },
         'Active-game cache restoration failed',
       );
       return false;
@@ -336,7 +344,10 @@ export class GameEphemeralStateService {
       await this.redis.connection.del(this.snapshotKey(gameId));
     } catch {
       this.logger.warn(
-        { gameId, guestSessionId },
+        {
+          gameId,
+          guestRef: this.safeLogs.guestReference(guestSessionId),
+        },
         'Post-commit disconnect state update failed',
       );
     }
@@ -351,7 +362,10 @@ export class GameEphemeralStateService {
       );
     } catch {
       this.logger.warn(
-        { gameId, guestSessionId },
+        {
+          gameId,
+          guestRef: this.safeLogs.guestReference(guestSessionId),
+        },
         'Post-commit reconnect state update failed',
       );
     }

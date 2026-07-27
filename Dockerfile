@@ -29,7 +29,12 @@ ENV TZ=UTC
 WORKDIR /app
 RUN apt-get update \
   && apt-get install --yes --no-install-recommends tini \
-  && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/* \
+  && rm -rf /usr/local/lib/node_modules/npm \
+    /usr/local/lib/node_modules/corepack \
+    /opt/yarn-v1.22.22 \
+  && rm -f /usr/local/bin/npm /usr/local/bin/npx \
+    /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
 COPY --from=build --chown=node:node /workspace/dist ./dist
 COPY --from=build --chown=node:node /workspace/node_modules ./node_modules
 COPY --from=build --chown=node:node /workspace/package.json ./

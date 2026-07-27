@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { AppConfigService } from '../../common/config/app-config.service.js';
+import { MetricsService } from '../../common/metrics/metrics.service.js';
 import { PresenceService } from '../presence/presence.service.js';
 import { DatabaseError } from '../persistence/database-errors.js';
 import {
@@ -19,6 +20,8 @@ import { GameLifecycleDeliveryRegistry } from './game-lifecycle-delivery.registr
 export class GameLifecycleService {
   private readonly graceMs: number;
   private readonly jobBatchSize: number;
+  private reconnectAttempts = 0;
+  private reconnectSuccesses = 0;
 
   constructor(
     config: AppConfigService,
@@ -26,10 +29,12 @@ export class GameLifecycleService {
     private readonly ephemeralState: GameEphemeralStateService,
     @Inject(GAME_LIFECYCLE_REPOSITORY)
     private readonly lifecycle: GameLifecycleRepository,
+    private readonly metrics: MetricsService,
     private readonly presence: PresenceService,
   ) {
     this.graceMs = config.values.GRACE_MS;
     this.jobBatchSize = config.values.JOB_BATCH_SIZE;
+    this.publishReconnectRatio();
   }
 
   async resign(input: ResignGame): Promise<TerminalSubmission> {
@@ -67,6 +72,12 @@ export class GameLifecycleService {
       this.graceMs,
     );
     if (event !== null) {
+      this.reconnectAttempts += 1;
+      this.metrics.increment(
+        'cluchess_reconnect_attempts_total',
+        'Players entering reconnect grace.',
+      );
+      this.publishReconnectRatio();
       await this.ephemeralState.afterDisconnect(
         event.gameId,
         guestSessionId,
@@ -80,6 +91,12 @@ export class GameLifecycleService {
   async reconnected(guestSessionId: string): Promise<PlayerReconnected | null> {
     const event = await this.lifecycle.markReconnected(guestSessionId);
     if (event !== null) {
+      this.reconnectSuccesses += 1;
+      this.metrics.increment(
+        'cluchess_reconnect_success_total',
+        'Players restored during reconnect grace.',
+      );
+      this.publishReconnectRatio();
       await this.ephemeralState.afterReconnect(event.gameId, guestSessionId);
       this.delivery.playerReconnected(event);
     }
@@ -154,7 +171,26 @@ export class GameLifecycleService {
       submission.guestSessionIds,
     );
     if (!submission.duplicate) {
+      if (
+        submission.ended.termination === 'abandonment' ||
+        submission.ended.termination === 'double_abandon'
+      ) {
+        this.metrics.increment(
+          'cluchess_games_abandoned_total',
+          'Games terminated because reconnect grace expired.',
+        );
+      }
       this.delivery.gameEnded(submission);
     }
+  }
+
+  private publishReconnectRatio(): void {
+    this.metrics.setGauge(
+      'cluchess_reconnect_success_ratio',
+      'Local ratio of reconnect attempts restored within grace.',
+      this.reconnectAttempts === 0
+        ? 1
+        : this.reconnectSuccesses / this.reconnectAttempts,
+    );
   }
 }

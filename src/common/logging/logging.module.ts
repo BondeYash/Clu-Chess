@@ -5,10 +5,40 @@ import { AppConfigModule } from '../config/app-config.module.js';
 import { AppConfigService } from '../config/app-config.service.js';
 import { CorrelationContextService } from './correlation-context.service.js';
 import { validCorrelationId } from './correlation-id.middleware.js';
+import { SafeLogContextService } from './safe-log-context.service.js';
+
+export const LOG_REDACTION_PATHS = Object.freeze([
+  'req.headers.authorization',
+  'req.headers.cookie',
+  'req.headers.proxy-authorization',
+  'req.remoteAddress',
+  'req.remotePort',
+  'res.headers.set-cookie',
+  'authorization',
+  '*.authorization',
+  'cookie',
+  '*.cookie',
+  'token',
+  '*.token',
+  'jti',
+  '*.jti',
+  'password',
+  '*.password',
+  'privateKey',
+  '*.privateKey',
+  'jwtPrivateKey',
+  '*.jwtPrivateKey',
+  'DATABASE_URL',
+  'REDIS_URL',
+  'databaseUrl',
+  '*.databaseUrl',
+  'redisUrl',
+  '*.redisUrl',
+]);
 
 @Global()
 @Module({
-  exports: [CorrelationContextService, LoggerModule],
+  exports: [CorrelationContextService, LoggerModule, SafeLogContextService],
   imports: [
     LoggerModule.forRootAsync({
       imports: [AppConfigModule],
@@ -27,28 +57,12 @@ import { validCorrelationId } from './correlation-id.middleware.js';
           },
           redact: {
             censor: '[REDACTED]',
-            paths: [
-              'req.headers.authorization',
-              'req.headers.cookie',
-              'req.remoteAddress',
-              'req.remotePort',
-              'res.headers.set-cookie',
-              'token',
-              '*.token',
-              'jti',
-              '*.jti',
-              'password',
-              '*.password',
-              'privateKey',
-              '*.privateKey',
-              'DATABASE_URL',
-              'REDIS_URL',
-            ],
+            paths: [...LOG_REDACTION_PATHS],
           },
         },
       }),
     }),
   ],
-  providers: [CorrelationContextService],
+  providers: [CorrelationContextService, SafeLogContextService],
 })
 export class LoggingModule {}

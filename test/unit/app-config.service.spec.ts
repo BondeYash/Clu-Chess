@@ -21,8 +21,11 @@ describe('AppConfigService', () => {
   it('identifies production configuration', () => {
     const config = new AppConfigService(
       parseEnvironment({
+        DATABASE_URL:
+          'postgresql://runtime:secret@db.internal:5432/cluchess?sslmode=require',
         NODE_ENV: 'production',
         ORIGIN_ALLOWLIST: 'https://chess.example',
+        REDIS_URL: 'rediss://default:secret@redis.internal:6379',
       }),
     );
 

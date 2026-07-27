@@ -10,7 +10,9 @@ import { randomUUID } from 'node:crypto';
 import { AppConfigService } from '../../common/config/app-config.service.js';
 import { ApplicationLifecycleService } from '../../common/lifecycle/application-lifecycle.service.js';
 import { CorrelationContextService } from '../../common/logging/correlation-context.service.js';
+import { SafeLogContextService } from '../../common/logging/safe-log-context.service.js';
 import { MetricsService } from '../../common/metrics/metrics.service.js';
+import { TelemetryService } from '../../common/telemetry/telemetry.service.js';
 import { PresenceService } from '../presence/presence.service.js';
 import { GuestSocketDisconnectRegistry } from '../session/infrastructure/guest-socket-disconnect-registry.js';
 import { ActiveGameLookupService } from './active-game-lookup.service.js';
@@ -26,7 +28,10 @@ import {
 import { BroadcastService } from './broadcast.service.js';
 import { ConnectionRegistryService } from './connection-registry.service.js';
 import { RealtimeProtocolService } from './protocol/realtime-protocol.service.js';
-import { PROTOCOL_VERSION } from './protocol/protocol.constants.js';
+import {
+  CLIENT_EVENT_NAMES,
+  PROTOCOL_VERSION,
+} from './protocol/protocol.constants.js';
 import { RealtimeError } from './protocol/realtime.errors.js';
 import type {
   ClientEventEnvelope,
@@ -65,6 +70,7 @@ export class RealtimeGateway
   private readonly transactionTimeoutMs: number;
   private readonly instanceId: string;
   private readonly logger = new Logger(RealtimeGateway.name);
+  private readonly maxSendQueuePackets: number;
   private server: RealtimeServer | undefined;
   private readonly trackedSockets = new Set<string>();
   private unregisterDrainHook: (() => void) | undefined;
@@ -83,6 +89,8 @@ export class RealtimeGateway
     private readonly presence: PresenceService,
     private readonly protocol: RealtimeProtocolService,
     private readonly rateLimits: RealtimeRateLimitService,
+    private readonly safeLogs: SafeLogContextService,
+    private readonly telemetry: TelemetryService,
     @Inject(REALTIME_COMMAND_HANDLER)
     private readonly commands: RealtimeCommandHandler,
     @Inject(GUEST_PRESENCE_OBSERVER)
@@ -92,6 +100,7 @@ export class RealtimeGateway
     this.drainTimeoutMs = config.values.DRAIN_TIMEOUT_MS;
     this.transactionTimeoutMs = config.values.DATABASE_TX_TIMEOUT_MS;
     this.instanceId = config.values.INSTANCE_ID;
+    this.maxSendQueuePackets = config.values.MAX_SOCKET_SEND_QUEUE_PACKETS;
     this.publishConnectionMetric();
   }
 
@@ -140,6 +149,9 @@ export class RealtimeGateway
     }
     socket.onAny((eventName: string, ...arguments_: unknown[]) => {
       void this.handleIncoming(socket, eventName, arguments_);
+    });
+    socket.prependAnyOutgoing(() => {
+      this.enforceBackpressure(socket);
     });
     const finishWork = this.lifecycle.trackWork('realtime');
     void this.initializeSocket(socket).finally(finishWork);
@@ -209,46 +221,79 @@ export class RealtimeGateway
       this.rawCorrelationId(rawEnvelope) ?? socket.data.correlationId,
     );
     const requestEventId = this.protocol.requestEventId(rawEnvelope);
+    const startedAt = performance.now();
 
     try {
       await this.correlation.run(correlationId, async () => {
-        try {
-          if (acknowledgment === undefined) {
-            throw new RealtimeError(
-              'INVALID_PAYLOAD',
-              'Socket command acknowledgment is required',
-              false,
-            );
-          }
-          const event = this.protocol.parseClientEvent(eventName, rawEnvelope);
-          const identity = this.identity(socket);
-          await this.rateLimits.consume(event.type, identity.guestSessionId);
-          const result = await this.executeEvent(socket, identity, event);
-          acknowledgment(
-            this.protocol.createSuccessAck(
-              event.eventId,
-              correlationId,
-              result.type,
-              result.payload,
-              result.gameVersion,
-            ),
-          );
-        } catch (error) {
-          const mapped = this.errors.map(error);
-          if (acknowledgment !== undefined) {
-            acknowledgment(
-              this.protocol.createFailureAck(
-                requestEventId,
+        await this.telemetry.withSpan(
+          'realtime.command',
+          { 'messaging.operation.name': this.boundedEventName(eventName) },
+          async (span) => {
+            let gameId: string | undefined;
+            try {
+              if (acknowledgment === undefined) {
+                throw new RealtimeError(
+                  'INVALID_PAYLOAD',
+                  'Socket command acknowledgment is required',
+                  false,
+                );
+              }
+              const event = this.protocol.parseClientEvent(
+                eventName,
+                rawEnvelope,
+              );
+              gameId = 'gameId' in event ? event.gameId : undefined;
+              const identity = this.identity(socket);
+              await this.rateLimits.consume(
+                event.type,
+                identity.guestSessionId,
+              );
+              const result = await this.executeEvent(socket, identity, event);
+              span?.setAttribute('cluchess.outcome', 'success');
+              acknowledgment(
+                this.protocol.createSuccessAck(
+                  event.eventId,
+                  correlationId,
+                  result.type,
+                  result.payload,
+                  result.gameVersion,
+                ),
+              );
+              this.logCommand(
+                socket,
                 correlationId,
-                mapped.error,
-                mapped.responseType,
-                mapped.gameVersion,
-              ),
-            );
-            return;
-          }
-          this.emitServerError(socket, error, correlationId);
-        }
+                event.type,
+                gameId,
+                'success',
+                startedAt,
+              );
+            } catch (error) {
+              const mapped = this.errors.map(error);
+              span?.setAttribute('cluchess.outcome', mapped.error.code);
+              this.logCommand(
+                socket,
+                correlationId,
+                this.boundedEventName(eventName),
+                gameId,
+                mapped.error.code,
+                startedAt,
+              );
+              if (acknowledgment !== undefined) {
+                acknowledgment(
+                  this.protocol.createFailureAck(
+                    requestEventId,
+                    correlationId,
+                    mapped.error,
+                    mapped.responseType,
+                    mapped.gameVersion,
+                  ),
+                );
+                return;
+              }
+              this.emitServerError(socket, error, correlationId);
+            }
+          },
+        );
       });
     } finally {
       finishWork();
@@ -534,12 +579,81 @@ export class RealtimeGateway
   }
 
   private publishConnectionMetric(): void {
-    this.metrics.setGauge(
+    for (const name of [
       'cluchess_ws_connections',
-      'Active WebSocket connections by application instance.',
-      this.trackedSockets.size,
+      'cluchess_ws_connections_total',
+    ]) {
+      this.metrics.setGauge(
+        name,
+        'Active WebSocket connections by application instance.',
+        this.trackedSockets.size,
+        { instance: this.instanceId },
+      );
+    }
+  }
+
+  private boundedEventName(eventName: string): string {
+    return (CLIENT_EVENT_NAMES as readonly string[]).includes(eventName)
+      ? eventName
+      : 'unknown';
+  }
+
+  private enforceBackpressure(socket: RealtimeSocket): void {
+    const writeBuffer = (
+      socket.conn as unknown as { writeBuffer?: readonly unknown[] }
+    ).writeBuffer;
+    const depth = writeBuffer?.length ?? 0;
+    if (
+      depth < this.maxSendQueuePackets ||
+      socket.data.backpressureClosing === true
+    ) {
+      return;
+    }
+    socket.data.backpressureClosing = true;
+    this.metrics.increment(
+      'cluchess_ws_backpressure_disconnects_total',
+      'Sockets disconnected after exceeding the bounded send queue.',
       { instance: this.instanceId },
     );
+    this.logger.warn(
+      {
+        depth,
+        guestRef:
+          socket.data.identity === undefined
+            ? undefined
+            : this.safeLogs.guestReference(socket.data.identity.guestSessionId),
+      },
+      'Socket send queue exceeded its configured bound',
+    );
+    setImmediate(() => {
+      socket.disconnect(true);
+    });
+  }
+
+  private logCommand(
+    socket: RealtimeSocket,
+    correlationId: string,
+    type: string,
+    gameId: string | undefined,
+    outcome: string,
+    startedAt: number,
+  ): void {
+    const guestSessionId = socket.data.identity?.guestSessionId;
+    const context = {
+      correlationId,
+      ...(gameId === undefined ? {} : { gameId }),
+      ...(guestSessionId === undefined
+        ? {}
+        : { guestRef: this.safeLogs.guestReference(guestSessionId) }),
+      latencyMs: Math.round(performance.now() - startedAt),
+      outcome,
+      type,
+    };
+    if (type === 'heartbeat.ping' && outcome === 'success') {
+      this.logger.debug(context);
+      return;
+    }
+    this.logger.log(context);
   }
 
   private async wait(delayMs: number): Promise<void> {

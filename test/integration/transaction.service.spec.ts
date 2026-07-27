@@ -2,6 +2,9 @@ import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AppConfigService } from '../../src/common/config/app-config.service.js';
 import { parseEnvironment } from '../../src/common/config/config.schema.js';
+import { CorrelationContextService } from '../../src/common/logging/correlation-context.service.js';
+import { MetricsService } from '../../src/common/metrics/metrics.service.js';
+import { TelemetryService } from '../../src/common/telemetry/telemetry.service.js';
 import { DatabaseError } from '../../src/modules/persistence/database-errors.js';
 import { PrismaService } from '../../src/modules/persistence/prisma.service.js';
 import { TransactionService } from '../../src/modules/persistence/transaction.service.js';
@@ -21,7 +24,12 @@ describe('transaction utilities', () => {
     pool = createPool();
     const config = new AppConfigService(parseEnvironment(process.env));
     prisma = new PrismaService(config);
-    transactions = new TransactionService(prisma, config);
+    transactions = new TransactionService(
+      prisma,
+      config,
+      new MetricsService(config),
+      new TelemetryService(config, new CorrelationContextService()),
+    );
     await prisma.onModuleInit();
   });
 

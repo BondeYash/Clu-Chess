@@ -1,0 +1,191 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "targets": [
+        {
+          "expr": "sum(cluchess_ws_connections)",
+          "legendFormat": "connections",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(cluchess_active_games)",
+          "legendFormat": "active games",
+          "refId": "B"
+        }
+      ],
+      "title": "Connections and active games",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(cluchess_move_latency_seconds_bucket[5m])))",
+          "legendFormat": "move p95",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(nodejs_eventloop_lag_seconds_bucket[5m])))",
+          "legendFormat": "event loop p99",
+          "refId": "B"
+        }
+      ],
+      "title": "Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "cluchess_mm_queue_depth",
+          "legendFormat": "{{mode}} queue",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(cluchess_matches_total[5m]))",
+          "legendFormat": "matches/s",
+          "refId": "B"
+        }
+      ],
+      "title": "Matchmaking",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "sum by (op) (rate(cluchess_pg_tx_failures_total[5m]))",
+          "legendFormat": "postgres {{op}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (op) (rate(cluchess_redis_errors_total[5m]))",
+          "legendFormat": "redis {{op}}",
+          "refId": "B"
+        },
+        {
+          "expr": "sum by (job) (rate(cluchess_cleanup_failures_total[5m]))",
+          "legendFormat": "cleanup {{job}}",
+          "refId": "C"
+        }
+      ],
+      "title": "Dependency and cleanup errors",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "cluchess_reconnect_success_ratio",
+          "legendFormat": "success ratio",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(cluchess_games_abandoned_total[5m]))",
+          "legendFormat": "abandonments/s",
+          "refId": "B"
+        },
+        {
+          "expr": "sum by (instance) (cluchess_process_restarts_total)",
+          "legendFormat": "{{instance}} starts",
+          "refId": "C"
+        }
+      ],
+      "title": "Recovery and stability",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 41,
+  "tags": ["cluchess", "backend"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "CluChess Backend",
+  "uid": "cluchess-backend",
+  "version": 1
+}

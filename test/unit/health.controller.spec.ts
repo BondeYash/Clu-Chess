@@ -1,4 +1,5 @@
-import type { Response } from 'express';
+import { ForbiddenException } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 import type { AppConfigService } from '../../src/common/config/app-config.service.js';
 import { ApplicationLifecycleService } from '../../src/common/lifecycle/application-lifecycle.service.js';
@@ -51,6 +52,41 @@ describe('HealthController', () => {
     );
 
     expect(health.liveness()).toEqual({ status: 'ok' });
+  });
+
+  it('requires the internal bearer token for non-loopback production metrics', () => {
+    const metrics = {
+      render: vi.fn().mockReturnValue('metric 1\n'),
+    } as unknown as MetricsService;
+    const health = new HealthController(
+      {
+        isProduction: true,
+        metricsBearerToken: 'internal-metrics-token',
+      } as AppConfigService,
+      lifecycle(),
+      metrics,
+      {} as PostgresHealthService,
+      {} as RedisService,
+    );
+    const response = { type: vi.fn() } as unknown as Response;
+    const request = {
+      headers: {},
+      ip: '10.0.0.5',
+      socket: {},
+    } as Request;
+
+    expect(() => health.metricsEndpoint(request, response)).toThrow(
+      ForbiddenException,
+    );
+    expect(
+      health.metricsEndpoint(
+        {
+          ...request,
+          headers: { authorization: 'Bearer internal-metrics-token' },
+        } as Request,
+        response,
+      ),
+    ).toBe('metric 1\n');
   });
 
   it('is ready only when lifecycle and dependencies are healthy', async () => {

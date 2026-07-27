@@ -49,8 +49,9 @@ describe('health endpoints with real dependencies', () => {
   });
 
   it('reports ready while PostgreSQL and Redis are healthy', async () => {
-    const response = await request(server).get('/readyz').expect(200);
+    const response = await request(server).get('/readyz');
 
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
     expect(response.body).toMatchObject({
       deps: {
         db: { status: 'up' },

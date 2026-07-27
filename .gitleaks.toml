@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public avatar catalog identifiers are asset keys, not credentials."
+regexTarget = "match"
+regexes = [
+  '''knight_(amber|bay|black|chestnut|gray|palomino|white)_0[1-3]''',
+]

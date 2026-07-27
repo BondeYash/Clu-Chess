@@ -16,6 +16,9 @@
 | [`game-lifecycle-operations.md`](game-lifecycle-operations.md) | Deadlines, absence, and non-move endings            |
 | [`recovery-operations.md`](recovery-operations.md)             | Recovery, reconciliation, and dependency failures   |
 | [`scaling-operations.md`](scaling-operations.md)               | Multi-replica routing, drain, and datastore scaling |
+| [`security-operations.md`](security-operations.md)             | Boundary, secret, datastore, and scanning controls  |
+| [`observability-operations.md`](observability-operations.md)   | Metrics, traces, dashboards, alerts, and capacity   |
+| [`observability-runbooks.md`](observability-runbooks.md)       | Alert response and escalation procedures            |
 
 ## Phase status
 
@@ -32,5 +35,6 @@
 | Phase 8 — Clocks and non-move terminal paths    | Complete |
 | Phase 9 — Recovery and dependency failure       | Complete |
 | Phase 10 — Multi-instance and graceful delivery | Complete |
+| Phase 11 — Security and observability hardening | Complete |
 
-Later phase documents and operational runbooks will be added here as they are completed.
+Later phase documents will be added here as they are completed.

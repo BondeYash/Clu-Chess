@@ -1,6 +1,7 @@
 name: cluchess-multi
 
 x-app-environment: &app-environment
+  ALLOW_INSECURE_LOCAL_PRODUCTION: 'true'
   DATABASE_URL: postgresql://cluchess_runtime:cluchess_runtime_dev@postgres:5432/cluchess?schema=public
   DRAIN_SOCKET_GRACE_MS: '500'
   DRAIN_TIMEOUT_MS: '15000'
@@ -8,6 +9,7 @@ x-app-environment: &app-environment
   JWT_PRIVATE_KEY_FILE: /run/secrets/cluchess/jwt-private.pem
   JWT_PUBLIC_KEYS_DIR: /run/secrets/cluchess/public
   LOG_LEVEL: info
+  METRICS_BEARER_TOKEN_FILE: /run/secrets/cluchess/metrics-token
   NODE_ENV: production
   ORIGIN_ALLOWLIST: https://localhost:${MULTI_EDGE_PORT:-3443}
   OTEL_ENABLED: 'false'
@@ -42,6 +44,11 @@ x-app: &app
     retries: 30
     start_period: 10s
   restart: unless-stopped
+  read_only: true
+  cap_drop: ['ALL']
+  security_opt: ['no-new-privileges:true']
+  tmpfs:
+    - /tmp:size=16m,mode=1777
   volumes:
     - jwt-keys:/run/secrets/cluchess:ro
 

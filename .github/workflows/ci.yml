@@ -47,6 +47,7 @@ jobs:
       - uses: docker/setup-buildx-action@v3
       - run: docker build --target production --tag cluchess:${{ github.sha }} .
       - run: test "$(docker image inspect cluchess:${{ github.sha }} --format '{{.Config.User}}')" = "node"
+      - run: docker run --rm --read-only --tmpfs /tmp:size=16m cluchess:${{ github.sha }} node --version
 
   multi-instance:
     name: Two-replica HTTPS and WSS smoke
@@ -55,3 +56,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: COMPOSE_PROGRESS=plain npm run test:multi:docker
+
+  observability:
+    name: Prometheus rules and observability manifests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - run: npm run test:observability:docker
+
+  security:
+    name: Dependency, license, secret, and container scans
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - run: COMPOSE_PROGRESS=plain sh scripts/run-security-scans.sh cluchess:${{ github.sha }}

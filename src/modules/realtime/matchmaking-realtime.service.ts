@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { AppConfigService } from '../../common/config/app-config.service.js';
 import { ApplicationLifecycleService } from '../../common/lifecycle/application-lifecycle.service.js';
+import { SafeLogContextService } from '../../common/logging/safe-log-context.service.js';
 import { MetricsService } from '../../common/metrics/metrics.service.js';
 import type {
   GameAllocation,
@@ -71,6 +72,7 @@ export class MatchmakingRealtimeService
     private readonly metrics: MetricsService,
     private readonly moves: GameMoveService,
     private readonly protocol: RealtimeProtocolService,
+    private readonly safeLogs: SafeLogContextService,
     private readonly snapshots: GameSnapshotPresenter,
   ) {
     this.drainRetryAfterMs = config.values.DRAIN_SOCKET_GRACE_MS;
@@ -126,12 +128,15 @@ export class MatchmakingRealtimeService
     }
     if (queueResult.status === 'rejected') {
       this.logger.warn(
-        { guestSessionId },
+        { guestRef: this.safeLogs.guestReference(guestSessionId) },
         'Matchmaking disconnect cleanup failed',
       );
     }
     if (gameResult.status === 'rejected') {
-      this.logger.warn({ guestSessionId }, 'Game disconnect transition failed');
+      this.logger.warn(
+        { guestRef: this.safeLogs.guestReference(guestSessionId) },
+        'Game disconnect transition failed',
+      );
     }
   }
 

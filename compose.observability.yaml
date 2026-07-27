@@ -1,0 +1,87 @@
+services:
+  keygen:
+    environment:
+      METRICS_TOKEN_READER_GID: '65534'
+
+  app-a:
+    environment:
+      OTEL_ENABLED: 'true'
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_TRACE_SAMPLE_RATIO: '1'
+    depends_on:
+      otel-collector:
+        condition: service_started
+
+  app-b:
+    environment:
+      OTEL_ENABLED: 'true'
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_TRACE_SAMPLE_RATIO: '1'
+    depends_on:
+      otel-collector:
+        condition: service_started
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.153.0
+    command: ['--config=/etc/otelcol/config.yaml']
+    depends_on:
+      tempo:
+        condition: service_started
+    restart: unless-stopped
+    volumes:
+      - ./observability/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+
+  tempo:
+    image: grafana/tempo:2.10.5
+    command: ['-config.file=/etc/tempo/config.yaml']
+    restart: unless-stopped
+    volumes:
+      - ./observability/tempo.yaml:/etc/tempo/config.yaml:ro
+      - tempo-data:/var/tempo
+
+  prometheus:
+    image: prom/prometheus:v3.11.3
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    depends_on:
+      app-a:
+        condition: service_healthy
+      app-b:
+        condition: service_healthy
+    ports:
+      - '${PROMETHEUS_PORT:-9090}:9090'
+    restart: unless-stopped
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - jwt-keys:/run/secrets/cluchess:ro
+      - prometheus-data:/prometheus
+
+  grafana:
+    image: grafana/grafana:13.1.0
+    depends_on:
+      prometheus:
+        condition: service_started
+      tempo:
+        condition: service_started
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: cluchess-local-admin
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_PLUGINS_PREINSTALL_DISABLED: 'true'
+      GF_PLUGINS_PREINSTALL_AUTO_UPDATE: 'false'
+    ports:
+      - '${GRAFANA_PORT:-3001}:3000'
+    restart: unless-stopped
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+
+volumes:
+  grafana-data:
+  prometheus-data:
+  tempo-data:

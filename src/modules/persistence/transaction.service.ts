@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AppConfigService } from '../../common/config/app-config.service.js';
+import { MetricsService } from '../../common/metrics/metrics.service.js';
+import { TelemetryService } from '../../common/telemetry/telemetry.service.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { toDatabaseError } from './database-errors.js';
 import { PrismaService } from './prisma.service.js';
@@ -23,6 +25,8 @@ export class TransactionService {
   constructor(
     private readonly prisma: PrismaService,
     config: AppConfigService,
+    private readonly metrics: MetricsService,
+    private readonly telemetry: TelemetryService,
   ) {
     this.timeoutMs = config.values.DATABASE_TX_TIMEOUT_MS;
   }
@@ -32,24 +36,38 @@ export class TransactionService {
     isolationLevel: Prisma.TransactionIsolationLevel = 'ReadCommitted',
   ): Promise<T> {
     try {
-      return await this.prisma.$transaction(
-        async (transaction) => {
-          await transaction.$queryRaw(
-            Prisma.sql`SELECT set_config(
-              'statement_timeout',
-              ${`${String(this.timeoutMs)}ms`},
-              true
-            )`,
-          );
-          return work(transaction);
-        },
+      return await this.telemetry.withActiveChildSpan(
+        'db.transaction',
         {
-          isolationLevel,
-          maxWait: this.timeoutMs,
-          timeout: this.timeoutMs,
+          'db.namespace': 'cluchess',
+          'db.operation.name': 'transaction',
+          'db.system.name': 'postgresql',
         },
+        async () =>
+          this.prisma.$transaction(
+            async (transaction) => {
+              await transaction.$queryRaw(
+                Prisma.sql`SELECT set_config(
+                  'statement_timeout',
+                  ${`${String(this.timeoutMs)}ms`},
+                  true
+                )`,
+              );
+              return work(transaction);
+            },
+            {
+              isolationLevel,
+              maxWait: this.timeoutMs,
+              timeout: this.timeoutMs,
+            },
+          ),
       );
     } catch (error) {
+      this.metrics.increment(
+        'cluchess_pg_tx_failures_total',
+        'PostgreSQL transaction failures by operation.',
+        { op: 'transaction' },
+      );
       throw toDatabaseError(error);
     }
   }

@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { MetricsService } from '../../common/metrics/metrics.service.js';
+import { TelemetryService } from '../../common/telemetry/telemetry.service.js';
 import { DatabaseError } from '../persistence/database-errors.js';
 import { gameSnapshotPayloadSchema } from '../realtime/protocol/protocol.schemas.js';
 import {
@@ -29,6 +30,7 @@ export class GameRecoveryService {
     private readonly metrics: MetricsService,
     private readonly presenter: GameSnapshotPresenter,
     private readonly rooms: GameRoomService,
+    private readonly telemetry: TelemetryService,
   ) {}
 
   async activeGameId(guestSessionId: string): Promise<string | null> {
@@ -61,6 +63,17 @@ export class GameRecoveryService {
   }
 
   async snapshot(
+    gameId: string,
+    guestSessionId: string,
+  ): Promise<RecoveredGameSnapshot> {
+    return this.telemetry.withSpan(
+      'game.snapshot.recover',
+      { 'cluchess.command': 'game.sync' },
+      async () => this.snapshotInternal(gameId, guestSessionId),
+    );
+  }
+
+  private async snapshotInternal(
     gameId: string,
     guestSessionId: string,
   ): Promise<RecoveredGameSnapshot> {

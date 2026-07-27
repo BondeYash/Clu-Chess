@@ -1,0 +1,66 @@
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: dependency and cleanup alerts fire
+    interval: 1m
+    input_series:
+      - series: 'cluchess_pg_tx_failures_total{op="transaction"}'
+        values: '0 10 20 30'
+      - series: 'cluchess_redis_errors_total{op="get"}'
+        values: '0 1 2 3'
+      - series: 'cluchess_cleanup_failures_total{job="game_deadline"}'
+        values: '0 1 1 1'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: CluChessDatabaseFailures
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: PostgreSQL transaction failures are sustained
+              runbook_url: https://github.com/BondeYash/Clu-Chess/blob/main/docs/observability-runbooks.md#postgresql-failures
+      - eval_time: 3m
+        alertname: CluChessRedisErrors
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: Redis errors are sustained
+              runbook_url: https://github.com/BondeYash/Clu-Chess/blob/main/docs/observability-runbooks.md#redis-errors
+      - eval_time: 3m
+        alertname: CluChessCleanupFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: A cleanup or reconciliation job is failing
+              runbook_url: https://github.com/BondeYash/Clu-Chess/blob/main/docs/observability-runbooks.md#cleanup-failures
+
+  - name: reconnect and restart alerts fire
+    interval: 1m
+    input_series:
+      - series: 'cluchess_reconnect_success_ratio{instance="a"}'
+        values: '0.5 0.5 0.5 0.5 0.5 0.5'
+      - series: 'cluchess_process_restarts_total{instance="a"}'
+        values: '0 1 2 3 4 5'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: CluChessReconnectFailures
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Reconnect success ratio is below 90 percent
+              runbook_url: https://github.com/BondeYash/Clu-Chess/blob/main/docs/observability-runbooks.md#reconnect-failures
+      - eval_time: 5m
+        alertname: CluChessInstanceFlapping
+        exp_alerts:
+          - exp_labels:
+              instance: a
+              severity: critical
+            exp_annotations:
+              summary: A CluChess application instance is repeatedly restarting
+              runbook_url: https://github.com/BondeYash/Clu-Chess/blob/main/docs/observability-runbooks.md#instance-flapping

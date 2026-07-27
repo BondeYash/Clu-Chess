@@ -1,4 +1,10 @@
-import { accessSync, constants, existsSync, statSync } from 'node:fs';
+import {
+  accessSync,
+  constants,
+  existsSync,
+  readFileSync,
+  statSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 
@@ -83,8 +89,15 @@ const environmentSchema = z
       .default('info'),
     OTEL_ENABLED: booleanFromString(false),
     OTEL_EXPORTER_OTLP_ENDPOINT: z.url().default('http://otel-collector:4318'),
+    OTEL_TRACE_SAMPLE_RATIO: z.coerce.number().min(0).max(1).default(1),
     METRICS_ENABLED: booleanFromString(true),
+    METRICS_BEARER_TOKEN_FILE: z
+      .string()
+      .min(1)
+      .default('/run/secrets/cluchess/metrics-token'),
     INSTANCE_ID: z.string().min(1).max(128).default('local'),
+    MAX_SOCKET_SEND_QUEUE_PACKETS: count(64),
+    ALLOW_INSECURE_LOCAL_PRODUCTION: booleanFromString(false),
     RL_SESSION_CREATE_LIMIT: count(10),
     RL_SESSION_CREATE_WINDOW_MS: duration(60_000),
     RL_SESSION_RENEW_LIMIT: count(30),
@@ -107,6 +120,7 @@ const environmentSchema = z
     JOB_ACTIVE_DRIFT_MS: duration(15_000),
     JOB_REVOCATION_REBUILD_MS: duration(300_000),
     JOB_SESSION_CLEANUP_MS: duration(3_600_000),
+    JOB_METRICS_REFRESH_MS: duration(10_000),
     JOB_BATCH_SIZE: z.coerce.number().int().min(1).max(1000).default(100),
   })
   .superRefine((environment, context) => {
@@ -189,6 +203,60 @@ const environmentSchema = z
         path: ['DRAIN_TIMEOUT_MS'],
       });
     }
+
+    if (
+      environment.NODE_ENV === 'production' &&
+      !environment.ALLOW_INSECURE_LOCAL_PRODUCTION
+    ) {
+      const databaseUrl = new URL(environment.DATABASE_URL);
+      const redisUrl = new URL(environment.REDIS_URL);
+      const databaseSslMode = databaseUrl.searchParams.get('sslmode');
+
+      if (
+        databaseUrl.password.length === 0 ||
+        !['require', 'verify-ca', 'verify-full'].includes(databaseSslMode ?? '')
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message:
+            'production PostgreSQL must use credentials and sslmode=require or stronger',
+          path: ['DATABASE_URL'],
+        });
+      }
+      if (redisUrl.protocol !== 'rediss:' || redisUrl.password.length === 0) {
+        context.addIssue({
+          code: 'custom',
+          message: 'production Redis must use rediss:// with authentication',
+          path: ['REDIS_URL'],
+        });
+      }
+    }
+
+    if (
+      environment.NODE_ENV === 'production' &&
+      environment.ALLOW_INSECURE_LOCAL_PRODUCTION
+    ) {
+      const databaseUrl = new URL(environment.DATABASE_URL);
+      const redisUrl = new URL(environment.REDIS_URL);
+      const isIsolatedDockerTopology =
+        databaseUrl.hostname === 'postgres' &&
+        redisUrl.hostname === 'redis' &&
+        origins.every((origin) => {
+          try {
+            return new URL(origin).hostname === 'localhost';
+          } catch {
+            return false;
+          }
+        });
+      if (!isIsolatedDockerTopology) {
+        context.addIssue({
+          code: 'custom',
+          message:
+            'may bypass datastore TLS only in the isolated local Docker topology',
+          path: ['ALLOW_INSECURE_LOCAL_PRODUCTION'],
+        });
+      }
+    }
   });
 
 export type AppEnvironment = Readonly<z.output<typeof environmentSchema>>;
@@ -218,12 +286,23 @@ export function assertRuntimeKeyFiles(environment: AppEnvironment): void {
   for (const [label, path] of [
     ['JWT private key', environment.JWT_PRIVATE_KEY_FILE],
     ['JWT public key', publicKeyPath],
+    ...(environment.NODE_ENV === 'production'
+      ? ([
+          ['Metrics bearer token', environment.METRICS_BEARER_TOKEN_FILE],
+        ] as const)
+      : []),
   ] as const) {
     try {
       if (!existsSync(path) || !statSync(path).isFile()) {
         throw new Error('not a readable file');
       }
       accessSync(path, constants.R_OK);
+      if (
+        label === 'Metrics bearer token' &&
+        readFileSync(path, 'utf8').trim().length < 32
+      ) {
+        throw new Error('token is too short');
+      }
     } catch {
       throw new Error(`${label} file is unavailable at configured path`);
     }

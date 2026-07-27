@@ -19,6 +19,7 @@ export interface AuthenticatedSocketIdentity {
 
 export interface RealtimeSocketData {
   addressHash?: string;
+  backpressureClosing?: boolean;
   correlationId?: string;
   identity?: Readonly<AuthenticatedSocketIdentity>;
   socketMember?: string;

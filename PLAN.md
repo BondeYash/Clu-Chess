@@ -962,24 +962,24 @@ Complete the security controls and make the service diagnosable, measurable, and
 
 #### Security
 
-- [ ] Audit WSS enforcement and origin allowlisting at both edge and app layers.
-- [ ] Enforce per-IP connection/session-create limits and per-guest queue/move/renew/sync limits.
-- [ ] Use atomic Redis rate-limit operations and document fail-open/fail-closed behavior by command.
-- [ ] Enforce membership on every game read and command.
-- [ ] Enforce payload-size and per-socket send-queue/backpressure limits.
-- [ ] Verify event replay and duplicate-command protection.
-- [ ] Redact JWTs, keys, credentials, cookies, authorization headers, and sensitive Redis/DB URLs.
-- [ ] Use private/TLS-authenticated PostgreSQL and Redis connections in production.
-- [ ] Use a least-privilege runtime DB role and separate migration role.
-- [ ] Source secrets from the deployment secret manager.
-- [ ] Add dependency, license, secret, and container scanning to CI.
-- [ ] Run the production container non-root with read-only filesystem where compatible.
-- [ ] Restrict `/metrics` at the network/edge layer.
+- [x] Audit WSS enforcement and origin allowlisting at both edge and app layers.
+- [x] Enforce per-IP connection/session-create limits and per-guest queue/move/renew/sync limits.
+- [x] Use atomic Redis rate-limit operations and document fail-open/fail-closed behavior by command.
+- [x] Enforce membership on every game read and command.
+- [x] Enforce payload-size and per-socket send-queue/backpressure limits.
+- [x] Verify event replay and duplicate-command protection.
+- [x] Redact JWTs, keys, credentials, cookies, authorization headers, and sensitive Redis/DB URLs.
+- [x] Use private/TLS-authenticated PostgreSQL and Redis connections in production.
+- [x] Use a least-privilege runtime DB role and separate migration role.
+- [x] Source secrets from the deployment secret manager.
+- [x] Add dependency, license, secret, and container scanning to CI.
+- [x] Run the production container non-root with read-only filesystem where compatible.
+- [x] Restrict `/metrics` at the network/edge layer.
 
 #### Metrics
 
-- [ ] Expose Prometheus-format metrics on the restricted `/metrics` endpoint.
-- [ ] Implement the metrics named in `Architecture.md`, including:
+- [x] Expose Prometheus-format metrics on the restricted `/metrics` endpoint.
+- [x] Implement the metrics named in `Architecture.md`, including:
   - WS connections;
   - queue depth and wait time;
   - active rooms/games;
@@ -992,29 +992,29 @@ Complete the security controls and make the service diagnosable, measurable, and
   - cleanup/reconciliation failure;
   - event-loop lag;
   - process memory/restarts.
-- [ ] Keep metric labels bounded; never use raw guest/game/event IDs as labels.
+- [x] Keep metric labels bounded; never use raw guest/game/event IDs as labels.
 
 #### Logs and traces
 
-- [ ] Add structured context for correlation, guest (safely represented), game, event, latency, and outcome.
-- [ ] Add trace spans for session creation, matchmaking, game allocation, move transaction, snapshot recovery, and broadcast.
-- [ ] Instrument PostgreSQL and Redis without leaking query secrets or creating excessive hot-path overhead.
-- [ ] Sample traces according to environment and error status.
+- [x] Add structured context for correlation, guest (safely represented), game, event, latency, and outcome.
+- [x] Add trace spans for session creation, matchmaking, game allocation, move transaction, snapshot recovery, and broadcast.
+- [x] Instrument PostgreSQL and Redis without leaking query secrets or creating excessive hot-path overhead.
+- [x] Sample traces according to environment and error status.
 
 #### Dashboards, alerts, and runbooks
 
-- [ ] Create dashboards for the RED/USE and chess-domain metrics.
-- [ ] Configure alerts for event-loop lag, move latency, queue stalls, database failures, Redis failures, reconnect failures, cleanup failures, and instance flapping.
-- [ ] Add runbooks linked from every alert.
-- [ ] Document capacity signals and scaling thresholds from `Architecture.md`.
+- [x] Create dashboards for the RED/USE and chess-domain metrics.
+- [x] Configure alerts for event-loop lag, move latency, queue stalls, database failures, Redis failures, reconnect failures, cleanup failures, and instance flapping.
+- [x] Add runbooks linked from every alert.
+- [x] Document capacity signals and scaling thresholds from `Architecture.md`.
 
 ### Verification
 
-- [ ] Security tests cover forged/expired/revoked tokens, wrong origin, oversized payload, non-member access, replay, rate limits, and log redaction.
-- [ ] Metrics appear with stable bounded labels during an end-to-end game.
-- [ ] One action can be followed by correlation ID from boundary through Redis/DB and broadcast.
-- [ ] Alert rules can be exercised in a non-production environment.
-- [ ] `/metrics` is unreachable from the public route.
+- [x] Security tests cover forged/expired/revoked tokens, wrong origin, oversized payload, non-member access, replay, rate limits, and log redaction.
+- [x] Metrics appear with stable bounded labels during an end-to-end game.
+- [x] One action can be followed by correlation ID from boundary through Redis/DB and broadcast.
+- [x] Alert rules can be exercised in a non-production environment.
+- [x] `/metrics` is unreachable from the public route.
 
 ### Exit criteria
 

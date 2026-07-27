@@ -11,6 +11,7 @@ import { GameEphemeralStateService } from './game-ephemeral-state.service.js';
 import { GameLifecycleDeliveryRegistry } from './game-lifecycle-delivery.registry.js';
 import { GameLifecycleService } from './game-lifecycle.service.js';
 import { GameMoveService } from './game-move.service.js';
+import { GameOperationalMetricsService } from './game-operational-metrics.service.js';
 import { GameReconciliationService } from './game-reconciliation.service.js';
 import { GameRecoveryService } from './game-recovery.service.js';
 import { GameRoomService } from './game-room.service.js';
@@ -39,6 +40,7 @@ import { PrismaGameplayRepository } from './infrastructure/prisma-gameplay.repos
     GameLifecycleDeliveryRegistry,
     GameLifecycleService,
     GameMoveService,
+    GameOperationalMetricsService,
     GameRecoveryService,
     GameReconciliationService,
     GameRoomService,

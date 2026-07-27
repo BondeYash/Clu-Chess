@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { AppConfigService } from '../../common/config/app-config.service.js';
+import { MetricsService } from '../../common/metrics/metrics.service.js';
+import { TelemetryService } from '../../common/telemetry/telemetry.service.js';
 import type { GameAllocation } from '../game/application/ports/game.repository.js';
 import { GameAllocationService } from '../game/game-allocation.service.js';
 import { PresenceService } from '../presence/presence.service.js';
@@ -45,8 +47,10 @@ export class MatchmakingService {
 
   constructor(
     private readonly allocations: GameAllocationService,
+    private readonly metrics: MetricsService,
     private readonly presence: PresenceService,
     private readonly scripts: MatchmakingScriptService,
+    private readonly telemetry: TelemetryService,
     config: AppConfigService,
   ) {
     this.batchSize = config.values.JOB_BATCH_SIZE;
@@ -89,6 +93,7 @@ export class MatchmakingService {
       observedAt.getTime(),
     );
     const effects = await this.attemptMatch(mode, observedAt);
+    await this.refreshQueueDepth(mode);
     return { effects, queue };
   }
 
@@ -96,14 +101,18 @@ export class MatchmakingService {
     guestSessionId: string,
     mode: MatchMode,
   ): Promise<LeaveQueueResult> {
-    return { queue: await this.scripts.leave(guestSessionId, mode) };
+    const queue = await this.scripts.leave(guestSessionId, mode);
+    await this.refreshQueueDepth(mode);
+    return { queue };
   }
 
   async finallyDisconnected(
     guestSessionId: string,
     mode: MatchMode = 'blitz',
   ): Promise<boolean> {
-    return (await this.scripts.leave(guestSessionId, mode)).left;
+    const left = (await this.scripts.leave(guestSessionId, mode)).left;
+    await this.refreshQueueDepth(mode);
+    return left;
   }
 
   async drain(
@@ -111,6 +120,7 @@ export class MatchmakingService {
     observedAt = new Date(),
   ): Promise<MatchmakingEffects> {
     if ((await this.scripts.queueSize(mode)) < 2) {
+      await this.refreshQueueDepth(mode);
       return EMPTY_EFFECTS;
     }
 
@@ -123,6 +133,7 @@ export class MatchmakingService {
         break;
       }
     }
+    await this.refreshQueueDepth(mode);
     return effects;
   }
 
@@ -130,7 +141,7 @@ export class MatchmakingService {
     mode: MatchMode = 'blitz',
     observedAt = new Date(),
   ): Promise<MatchmakingEffects> {
-    return {
+    const effects = {
       ...EMPTY_EFFECTS,
       removed: await this.scripts.sweep(
         mode,
@@ -138,6 +149,8 @@ export class MatchmakingService {
         this.batchSize,
       ),
     };
+    await this.refreshQueueDepth(mode);
+    return effects;
   }
 
   async reconcile(observedAt = new Date()): Promise<MatchmakingEffects> {
@@ -178,15 +191,20 @@ export class MatchmakingService {
     mode: MatchMode,
     observedAt: Date,
   ): Promise<MatchmakingEffects> {
-    const attempt = await this.scripts.tryMatch(
-      mode,
-      randomUUID(),
-      randomUUID(),
-      observedAt.getTime(),
-      this.batchSize,
+    return this.telemetry.withActiveChildSpan(
+      'mm.match',
+      { 'cluchess.mode': mode },
+      async () => {
+        const attempt = await this.scripts.tryMatch(
+          mode,
+          randomUUID(),
+          randomUUID(),
+          observedAt.getTime(),
+          this.batchSize,
+        );
+        return this.effectsFromAttempt(attempt, observedAt);
+      },
     );
-    const effects = await this.effectsFromAttempt(attempt, observedAt);
-    return effects;
   }
 
   private async effectsFromAttempt(
@@ -217,6 +235,19 @@ export class MatchmakingService {
         observedAt,
       );
       await this.finalizeCommitted(reservation, allocation);
+      for (const queuedAt of [reservation.aScore, reservation.bScore]) {
+        this.metrics.observe(
+          'cluchess_mm_wait_seconds',
+          'Matchmaking wait duration from enqueue to reservation.',
+          Math.max(0, observedAt.getTime() - queuedAt) / 1000,
+          { mode: reservation.mode },
+        );
+      }
+      this.metrics.increment(
+        'cluchess_matches_total',
+        'Committed matches by mode.',
+        { mode: reservation.mode },
+      );
       return { ...EMPTY_EFFECTS, allocations: [allocation] };
     } catch (error) {
       const recovered = await this.recoverAfterAllocationFailure(
@@ -326,6 +357,20 @@ export class MatchmakingService {
       removed: [],
       requeued: [],
     };
+  }
+
+  private async refreshQueueDepth(mode: MatchMode): Promise<void> {
+    try {
+      const depth = await this.scripts.queueSize(mode);
+      this.metrics.setGauge(
+        'cluchess_mm_queue_depth',
+        'Guests waiting in matchmaking by mode.',
+        depth,
+        { mode },
+      );
+    } catch {
+      // The command that owns the operation reports dependency degradation.
+    }
   }
 }
 

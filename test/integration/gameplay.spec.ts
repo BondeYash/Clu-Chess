@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AppModule } from '../../src/app.module.js';
+import { MetricsService } from '../../src/common/metrics/metrics.service.js';
 import { RedisService } from '../../src/common/redis/redis.service.js';
 import type { MoveInput } from '../../src/modules/chess/application/ports/chess-engine.js';
 import type { MoveSubmission } from '../../src/modules/game/application/ports/gameplay.repository.js';
@@ -195,6 +196,12 @@ describe('authoritative gameplay transactions', () => {
         }),
       'IDEMPOTENCY_KEY_REUSED',
     );
+
+    const renderedMetrics = app.get(MetricsService).render();
+    expect(renderedMetrics).toContain(
+      'cluchess_moves_rejected_total{code="STALE_GAME_VERSION"} 1',
+    );
+    expect(renderedMetrics).toContain('cluchess_optimistic_conflicts_total 1');
   });
 
   it('serializes simultaneous same-version moves so exactly one commits', async () => {

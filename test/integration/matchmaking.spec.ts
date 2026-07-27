@@ -5,7 +5,9 @@ import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AppModule } from '../../src/app.module.js';
 import { AppConfigService } from '../../src/common/config/app-config.service.js';
+import { MetricsService } from '../../src/common/metrics/metrics.service.js';
 import { RedisService } from '../../src/common/redis/redis.service.js';
+import { TelemetryService } from '../../src/common/telemetry/telemetry.service.js';
 import { GameAllocationService } from '../../src/modules/game/game-allocation.service.js';
 import type { MatchReservation } from '../../src/modules/matchmaking/domain/matchmaking.types.js';
 import { MatchmakingScriptService } from '../../src/modules/matchmaking/infrastructure/matchmaking-script.service.js';
@@ -303,8 +305,10 @@ describe('atomic matchmaking and durable allocation', () => {
     );
     const secondInstance = new MatchmakingService(
       allocations,
+      app.get(MetricsService),
       presence,
       secondScripts,
+      app.get(TelemetryService),
       app.get(AppConfigService),
     );
     const effects = await Promise.all([
