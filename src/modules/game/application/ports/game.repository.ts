@@ -1,14 +1,11 @@
-export type GameStatus =
-  | 'ABANDONED'
-  | 'COMPLETED'
-  | 'CREATED'
-  | 'EXPIRED'
-  | 'IN_PROGRESS'
-  | 'READY'
-  | 'RECONNECTING'
-  | 'WAITING_FOR_PLAYERS';
+import type {
+  GameResult,
+  GameStatus,
+  GameTermination,
+  PlayerColor,
+} from '../../domain/game.types.js';
 
-export type PlayerColor = 'b' | 'w';
+export type { GameStatus, PlayerColor } from '../../domain/game.types.js';
 
 export type GamePlayerRecord = Readonly<{
   color: PlayerColor;
@@ -26,9 +23,9 @@ export type GameRecord = Readonly<{
   id: string;
   incrementMs: number;
   matchId: string;
-  result: '0-1' | '1-0' | '1/2-1/2' | '*' | null;
+  result: GameResult | null;
   status: GameStatus;
-  termination: string | null;
+  termination: GameTermination | null;
   timeInitialMs: number;
   turnColor: PlayerColor;
   turnStartedAt: Date | null;
@@ -58,9 +55,9 @@ export type UpdateGameAtVersion = Readonly<{
   expectedVersion: number;
   gameId: string;
   pgn?: string;
-  result?: '0-1' | '1-0' | '1/2-1/2' | '*' | null;
+  result?: GameResult | null;
   status?: GameStatus;
-  termination?: string | null;
+  termination?: GameTermination | null;
   turnColor?: PlayerColor;
   turnStartedAt?: Date | null;
   whiteClockMs?: number;

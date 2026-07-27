@@ -530,17 +530,17 @@ Build deterministic, vendor-isolated chess rules and a pure game lifecycle befor
 
 #### Domain model
 
-- [ ] Define game/player/move/snapshot domain types independent of Prisma and Socket.IO.
-- [ ] Implement the game state machine as explicit transition guards.
-- [ ] Make illegal transitions return stable domain errors.
-- [ ] Define terminal result derivation in one place.
-- [ ] Define version changes for moves and non-move terminal transitions.
+- [x] Define game/player/move/snapshot domain types independent of Prisma and Socket.IO.
+- [x] Implement the game state machine as explicit transition guards.
+- [x] Make illegal transitions return stable domain errors.
+- [x] Define terminal result derivation in one place.
+- [x] Define version changes for moves and non-move terminal transitions.
 
 #### Chess engine adapter
 
-- [ ] Define the approved history-aware `ChessEngine` interface.
-- [ ] Implement the `chess.js` adapter without exposing `chess.js` types outside the module.
-- [ ] Support:
+- [x] Define the approved history-aware `ChessEngine` interface.
+- [x] Implement the `chess.js` adapter without exposing `chess.js` types outside the module.
+- [x] Support:
   - normal legal and illegal moves;
   - promotion to queen/rook/bishop/knight;
   - castling;
@@ -552,27 +552,35 @@ Build deterministic, vendor-isolated chess rules and a pure game lifecycle befor
   - fifty-move rule;
   - FEN load/round-trip;
   - SAN, UCI, and PGN generation.
-- [ ] Normalize engine exceptions into `IllegalMoveError` or configuration/data-corruption errors.
-- [ ] Keep the adapter deterministic for a given initial position, history, and proposal.
+- [x] Normalize engine exceptions into `IllegalMoveError` or configuration/data-corruption errors.
+- [x] Keep the adapter deterministic for a given initial position, history, and proposal.
 
 #### Clock domain
 
-- [ ] Implement pure clock calculations using server timestamps according to Gate C.
-- [ ] Cover increment, elapsed-time deduction, pause/resume, flag fall, and zero-boundary behavior.
-- [ ] Keep scheduling separate from clock calculation.
+- [x] Implement pure clock calculations using server timestamps according to Gate C.
+- [x] Cover increment, elapsed-time deduction, pause/resume, flag fall, and zero-boundary behavior.
+- [x] Keep scheduling separate from clock calculation.
 
 ### Verification
 
-- [ ] Unit tests cover every state transition and forbidden transition.
-- [ ] Adapter tests cover every chess rule listed above with known positions.
-- [ ] Threefold tests prove history is considered rather than current FEN alone.
-- [ ] FEN/PGN/move replay results are consistent.
-- [ ] Clock tests use a fake time source and contain no sleeps.
+- [x] Unit tests cover every state transition and forbidden transition.
+- [x] Adapter tests cover every chess rule listed above with known positions.
+- [x] Threefold tests prove history is considered rather than current FEN alone.
+- [x] FEN/PGN/move replay results are consistent.
+- [x] Clock tests use a fake time source and contain no sleeps.
 
 ### Exit criteria
 
 - FR-7's rules layer is complete and strongly tested.
 - The game service can depend on interfaces without importing `chess.js`.
+
+> **Result:** Passed the strict format, lint, type, build, and unit coverage
+> gates plus the complete Docker-backed integration suite. The pure domain
+> covers every legal and forbidden lifecycle transition, canonical terminal
+> derivation, monotonic versions, and server-timestamp clock arithmetic. The
+> vendor-isolated `chess.js` adapter is verified for all required rules,
+> history-aware threefold repetition, deterministic FEN/PGN replay, and
+> fail-closed corruption handling.
 
 ---
 
