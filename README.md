@@ -17,6 +17,7 @@ PostgreSQL 16 and Redis 7, deploys Prisma migrations, and serves:
 - liveness: <http://localhost:3000/healthz>
 - readiness: <http://localhost:3000/readyz>
 - anonymous session lifecycle: <http://localhost:3000/v1/session>
+- authenticated Socket.IO v1 namespace: <http://localhost:3000>
 
 No `.env` file, host Node.js installation, database, cache, or signing-key
 setup is required.
@@ -55,3 +56,6 @@ restore expectations are in
 [docs/database-operations.md](docs/database-operations.md).
 Guest-token rotation, revocation, cookies, and retention are documented in
 [docs/session-operations.md](docs/session-operations.md).
+Socket authentication, protocol boundaries, presence, and multi-instance
+delivery are documented in
+[docs/realtime-operations.md](docs/realtime-operations.md).

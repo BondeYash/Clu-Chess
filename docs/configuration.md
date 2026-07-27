@@ -50,42 +50,44 @@ listens on its validated `PORT=3000` inside Docker.
 
 All duration values use explicit millisecond or second suffixes. Startup validation rejects absent, malformed, unsafe, or contradictory values.
 
-| Variable                      | Local default              | Test default              | Production rule             |
-| ----------------------------- | -------------------------- | ------------------------- | --------------------------- |
-| `NODE_ENV`                    | `development`              | `test`                    | `production`                |
-| `PORT`                        | `3000`                     | allocated                 | platform supplied or `3000` |
-| `DATABASE_URL`                | Compose runtime-role URL   | Testcontainers URL        | required runtime secret     |
-| `MIGRATION_DATABASE_URL`      | Compose migration-role URL | Testcontainers URL        | migration job secret only   |
-| `DATABASE_POOL_MAX`           | `20`                       | `5`                       | required, initially `20–40` |
-| `DATABASE_TX_TIMEOUT_MS`      | `3000`                     | `3000`                    | required                    |
-| `REDIS_URL`                   | Compose Redis URL          | Testcontainers URL        | required secret/reference   |
-| `JWT_PRIVATE_KEY_FILE`        | generated volume path      | generated test key path   | required mounted secret     |
-| `JWT_PUBLIC_KEYS_DIR`         | generated volume directory | generated test directory  | required mounted key set    |
-| `JWT_KID`                     | `local-dev-1`              | `test-1`                  | required unique key ID      |
-| `JWT_TTL_SECONDS`             | `43200`                    | `43200`                   | default `43200`             |
-| `JWT_CLOCK_SKEW_SECONDS`      | `30`                       | `30`                      | default `30`                |
-| `SESSION_COOKIE_ENABLED`      | `true`                     | `true`                    | policy supplied             |
-| `SESSION_COOKIE_NAME`         | `cluchess_guest`           | `cluchess_guest`          | stable non-secret name      |
-| `SESSION_RETENTION_DAYS`      | `30`                       | `30`                      | minimum `1`                 |
-| `ORIGIN_ALLOWLIST`            | `http://localhost:5173`    | test origin               | required HTTPS origins      |
-| `TIME_INITIAL_MS`             | `300000`                   | scenario supplied         | default `300000`            |
-| `TIME_INCREMENT_MS`           | `2000`                     | scenario supplied         | default `2000`              |
-| `JOIN_DEADLINE_MS`            | `20000`                    | shorter fake-time config  | default `20000`             |
-| `GRACE_MS`                    | `30000`                    | shorter fake-time config  | default `30000`             |
-| `RESERVATION_TTL_MS`          | `30000`                    | shorter integration value | default `30000`             |
-| `PRESENCE_TTL_MS`             | `45000`                    | shorter integration value | default `45000`             |
-| `QUEUE_GUARD_TTL_MS`          | `120000`                   | shorter integration value | default `120000`            |
-| `QUEUE_MAX_WAIT_MS`           | `120000`                   | shorter integration value | default `120000`            |
-| `SNAPSHOT_CACHE_TTL_MS`       | `60000`                    | shorter integration value | default `60000`             |
-| `MAX_WS_BUFFER_BYTES`         | `8192`                     | `8192`                    | maximum `8192` for v1       |
-| `DRAIN_TIMEOUT_MS`            | `15000`                    | `1000`                    | default `15000`             |
-| `SOCKET_PING_INTERVAL_MS`     | `25000`                    | scenario supplied         | default `25000`             |
-| `SOCKET_PING_TIMEOUT_MS`      | `20000`                    | scenario supplied         | default `20000`             |
-| `LOG_LEVEL`                   | `debug`                    | `warn`                    | `info` unless overridden    |
-| `OTEL_ENABLED`                | `false`                    | `false`                   | `true`                      |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Compose profile URL        | test collector            | required when OTel enabled  |
-| `METRICS_ENABLED`             | `true`                     | `true`                    | `true`                      |
-| `INSTANCE_ID`                 | generated hostname         | generated                 | platform/hostname supplied  |
+| Variable                               | Local default              | Test default              | Production rule             |
+| -------------------------------------- | -------------------------- | ------------------------- | --------------------------- |
+| `NODE_ENV`                             | `development`              | `test`                    | `production`                |
+| `PORT`                                 | `3000`                     | allocated                 | platform supplied or `3000` |
+| `DATABASE_URL`                         | Compose runtime-role URL   | Testcontainers URL        | required runtime secret     |
+| `MIGRATION_DATABASE_URL`               | Compose migration-role URL | Testcontainers URL        | migration job secret only   |
+| `DATABASE_POOL_MAX`                    | `20`                       | `5`                       | required, initially `20–40` |
+| `DATABASE_TX_TIMEOUT_MS`               | `3000`                     | `3000`                    | required                    |
+| `REDIS_URL`                            | Compose Redis URL          | Testcontainers URL        | required secret/reference   |
+| `JWT_PRIVATE_KEY_FILE`                 | generated volume path      | generated test key path   | required mounted secret     |
+| `JWT_PUBLIC_KEYS_DIR`                  | generated volume directory | generated test directory  | required mounted key set    |
+| `JWT_KID`                              | `local-dev-1`              | `test-1`                  | required unique key ID      |
+| `JWT_TTL_SECONDS`                      | `43200`                    | `43200`                   | default `43200`             |
+| `JWT_CLOCK_SKEW_SECONDS`               | `30`                       | `30`                      | default `30`                |
+| `SESSION_COOKIE_ENABLED`               | `true`                     | `true`                    | policy supplied             |
+| `SESSION_COOKIE_NAME`                  | `cluchess_guest`           | `cluchess_guest`          | stable non-secret name      |
+| `SESSION_RETENTION_DAYS`               | `30`                       | `30`                      | minimum `1`                 |
+| `ORIGIN_ALLOWLIST`                     | `http://localhost:5173`    | test origin               | required HTTPS origins      |
+| `TIME_INITIAL_MS`                      | `300000`                   | scenario supplied         | default `300000`            |
+| `TIME_INCREMENT_MS`                    | `2000`                     | scenario supplied         | default `2000`              |
+| `JOIN_DEADLINE_MS`                     | `20000`                    | shorter fake-time config  | default `20000`             |
+| `GRACE_MS`                             | `30000`                    | shorter fake-time config  | default `30000`             |
+| `RESERVATION_TTL_MS`                   | `30000`                    | shorter integration value | default `30000`             |
+| `PRESENCE_TTL_MS`                      | `45000`                    | shorter integration value | default `45000`             |
+| `QUEUE_GUARD_TTL_MS`                   | `120000`                   | shorter integration value | default `120000`            |
+| `QUEUE_MAX_WAIT_MS`                    | `120000`                   | shorter integration value | default `120000`            |
+| `SNAPSHOT_CACHE_TTL_MS`                | `60000`                    | shorter integration value | default `60000`             |
+| `MAX_WS_BUFFER_BYTES`                  | `8192`                     | `8192`                    | maximum `8192` for v1       |
+| `DRAIN_TIMEOUT_MS`                     | `15000`                    | `1000`                    | default `15000`             |
+| `SOCKET_PING_INTERVAL_MS`              | `25000`                    | scenario supplied         | default `25000`             |
+| `SOCKET_PING_TIMEOUT_MS`               | `20000`                    | scenario supplied         | default `20000`             |
+| `SOCKET_RECOVERY_MAX_DISCONNECTION_MS` | `120000`                   | `5000`                    | bounded, default `120000`   |
+| `SOCKET_ADAPTER_STREAM_MAX_LEN`        | `10000`                    | `10000`                   | bounded retention target    |
+| `LOG_LEVEL`                            | `debug`                    | `warn`                    | `info` unless overridden    |
+| `OTEL_ENABLED`                         | `false`                    | `false`                   | `true`                      |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`          | Compose profile URL        | test collector            | required when OTel enabled  |
+| `METRICS_ENABLED`                      | `true`                     | `true`                    | `true`                      |
+| `INSTANCE_ID`                          | generated hostname         | generated                 | platform/hostname supplied  |
 
 ## 4. Rate-limit configuration
 

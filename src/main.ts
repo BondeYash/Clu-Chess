@@ -5,6 +5,7 @@ import { AppModule } from './app.module.js';
 import { AppConfigService } from './common/config/app-config.service.js';
 import { ApplicationLifecycleService } from './common/lifecycle/application-lifecycle.service.js';
 import { shutdownTelemetry } from './instrumentation.js';
+import { configureRealtimeAdapter } from './modules/realtime/infrastructure/redis-streams-io.adapter.js';
 
 process.env.TZ = 'UTC';
 
@@ -26,6 +27,7 @@ async function bootstrap(): Promise<void> {
     credentials: true,
     origin: [...config.allowedOrigins],
   });
+  await configureRealtimeAdapter(app);
   await app.listen(config.values.PORT, '0.0.0.0');
   logger.log(
     `CluChess backend listening on port ${String(config.values.PORT)}`,

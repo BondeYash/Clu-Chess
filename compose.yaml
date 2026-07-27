@@ -53,18 +53,28 @@ services:
     environment:
       MIGRATION_DATABASE_URL: postgresql://cluchess_migrator:cluchess_migrator_dev@postgres:5432/cluchess?schema=public
 
+  node-modules-init:
+    build:
+      context: .
+      target: development
+    command: ['chown', '-R', 'node:node', '/workspace/node_modules']
+    user: '0:0'
+    volumes:
+      - app-node-modules:/workspace/node_modules
+
   app:
     build:
       context: .
       target: development
     command:
       - sh
-      - -c
-      - npm run prisma:generate && npm run start:dev
+      - scripts/start-development.sh
     depends_on:
       keygen:
         condition: service_completed_successfully
       migrate:
+        condition: service_completed_successfully
+      node-modules-init:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy

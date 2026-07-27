@@ -9,7 +9,8 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/* \
   && chown node:node /workspace
 COPY --chown=node:node package.json package-lock.json ./
-RUN npm ci
+RUN npm ci \
+  && cp package-lock.json node_modules/.cluchess-package-lock.json
 
 FROM dependencies AS development
 ENV NODE_ENV=development

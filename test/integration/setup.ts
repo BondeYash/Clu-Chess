@@ -6,3 +6,5 @@ process.env.REDIS_URL = inject('redisUrl');
 process.env.DATABASE_POOL_MAX = '5';
 process.env.DATABASE_TX_TIMEOUT_MS = '3000';
 process.env.DRAIN_TIMEOUT_MS = '4000';
+process.env.RL_CONNECTIONS_PER_IP = '2';
+process.env.SOCKET_RECOVERY_MAX_DISCONNECTION_MS = '5000';

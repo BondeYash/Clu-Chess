@@ -3,8 +3,8 @@ import { IdentityModule } from '../identity/identity.module.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
 import { GUEST_SESSION_REPOSITORY } from './application/ports/guest-session.repository.js';
 import { GUEST_SOCKET_DISCONNECT_PORT } from './application/ports/guest-socket-disconnect.port.js';
+import { GuestSocketDisconnectRegistry } from './infrastructure/guest-socket-disconnect-registry.js';
 import { PrismaGuestSessionRepository } from './infrastructure/prisma-guest-session.repository.js';
-import { NoopGuestSocketDisconnector } from './infrastructure/noop-guest-socket-disconnector.js';
 import { JwtTokenService } from './jwt-token.service.js';
 import {
   ResetSessionAuthGuard,
@@ -25,12 +25,13 @@ import { SessionService } from './session.service.js';
     SessionAuthGuard,
     SessionAuthenticationService,
     SessionRevocationService,
+    GuestSocketDisconnectRegistry,
   ],
   imports: [IdentityModule, PersistenceModule],
   providers: [
     JwtTokenService,
     PrismaGuestSessionRepository,
-    NoopGuestSocketDisconnector,
+    GuestSocketDisconnectRegistry,
     ResetSessionAuthGuard,
     SessionAuthGuard,
     SessionAuthenticationService,
@@ -45,7 +46,7 @@ import { SessionService } from './session.service.js';
     },
     {
       provide: GUEST_SOCKET_DISCONNECT_PORT,
-      useExisting: NoopGuestSocketDisconnector,
+      useExisting: GuestSocketDisconnectRegistry,
     },
   ],
 })

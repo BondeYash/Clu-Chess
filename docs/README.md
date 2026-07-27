@@ -9,6 +9,7 @@
 | [`configuration.md`](configuration.md)             | Zero-touch Docker and typed configuration contract |
 | [`database-operations.md`](database-operations.md) | Roles, migrations, rollback, backup, and restore   |
 | [`session-operations.md`](session-operations.md)   | Guest tokens, revocation, rotation, and retention  |
+| [`realtime-operations.md`](realtime-operations.md) | Socket transport, presence, scaling, and recovery  |
 
 ## Phase status
 
@@ -18,5 +19,6 @@
 | Phase 1 — Repository and runtime foundation  | Complete |
 | Phase 2 — Durable persistence foundation     | Complete |
 | Phase 3 — Anonymous identity and sessions    | Complete |
+| Phase 4 — Realtime protocol and presence     | Complete |
 
 Later phase documents and operational runbooks will be added here as they are completed.

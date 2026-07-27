@@ -451,6 +451,8 @@ Implement a low-PII anonymous identity that survives refresh, authenticates REST
 
 ## Phase 4 — Realtime protocol, authentication, and presence
 
+> **Status:** Complete — accepted 2026-07-27
+
 ### Objective
 
 Provide one authenticated Socket.IO namespace with strict message validation, stable acknowledgements, personal rooms, presence, and delivery infrastructure.
@@ -459,53 +461,62 @@ Provide one authenticated Socket.IO namespace with strict message validation, st
 
 #### Protocol
 
-- [ ] Implement the v1 envelope and discriminated Zod schemas for every C→S and S→C event.
-- [ ] Centralize event names, error codes, payload limits, ack types, and protocol version handling.
-- [ ] Reject a mismatch between the Socket.IO event name and envelope `type` if Gate H requires it.
-- [ ] Generate server event IDs and server timestamps.
-- [ ] Propagate/generate `correlationId` for every inbound socket command and acknowledgement.
-- [ ] Map internal/domain errors to safe protocol errors.
+- [x] Implement the v1 envelope and discriminated Zod schemas for every C→S and S→C event.
+- [x] Centralize event names, error codes, payload limits, ack types, and protocol version handling.
+- [x] Reject a mismatch between the Socket.IO event name and envelope `type` if Gate H requires it.
+- [x] Generate server event IDs and server timestamps.
+- [x] Propagate/generate `correlationId` for every inbound socket command and acknowledgement.
+- [x] Map internal/domain errors to safe protocol errors.
 
 #### Gateway and authentication
 
-- [ ] Create the single default namespace gateway.
-- [ ] Verify JWTs and the approved revocation state during handshake.
-- [ ] Store immutable authenticated identity in `socket.data`.
-- [ ] Join every socket to `guest:{guestId}`.
-- [ ] Emit `session.ready` with recovery hints.
-- [ ] Support multiple sockets/tabs for one guest without weakening one-queue/one-game rules.
-- [ ] Apply origin allowlisting, WSS production assumptions, connection caps, and `maxHttpBufferSize`.
+- [x] Create the single default namespace gateway.
+- [x] Verify JWTs and the approved revocation state during handshake.
+- [x] Store immutable authenticated identity in `socket.data`.
+- [x] Join every socket to `guest:{guestId}`.
+- [x] Emit `session.ready` with recovery hints.
+- [x] Support multiple sockets/tabs for one guest without weakening one-queue/one-game rules.
+- [x] Apply origin allowlisting, WSS production assumptions, connection caps, and `maxHttpBufferSize`.
 
 #### Redis and delivery
 
-- [ ] Implement `ioredis` clients separated where required for commands, subscribers/adapter, and blocking work.
-- [ ] Register the Redis Streams Socket.IO adapter from the beginning.
-- [ ] Configure bounded connection-state recovery.
-- [ ] Implement `BroadcastService` so domain/application code emits through a transport-neutral port.
-- [ ] Ensure same-instance delivery remains usable when the adapter is degraded.
+- [x] Implement `ioredis` clients separated where required for commands, subscribers/adapter, and blocking work.
+- [x] Register the Redis Streams Socket.IO adapter from the beginning.
+- [x] Configure bounded connection-state recovery.
+- [x] Implement `BroadcastService` so domain/application code emits through a transport-neutral port.
+- [x] Ensure same-instance delivery remains usable when the adapter is degraded.
 
 #### Presence
 
-- [ ] Mark presence during authenticated connection.
-- [ ] Implement `heartbeat.ping`/`heartbeat.pong`.
-- [ ] Refresh guest presence and relevant queue guard TTLs.
-- [ ] Track multiple sockets so one tab closing does not mark the guest absent while another remains connected.
-- [ ] Remove/expire presence only when no live socket remains.
-- [ ] Add socket command rate-limit hooks.
+- [x] Mark presence during authenticated connection.
+- [x] Implement `heartbeat.ping`/`heartbeat.pong`.
+- [x] Refresh guest presence and relevant queue guard TTLs.
+- [x] Track multiple sockets so one tab closing does not mark the guest absent while another remains connected.
+- [x] Remove/expire presence only when no live socket remains.
+- [x] Add socket command rate-limit hooks.
 
 ### Verification
 
-- [ ] Valid JWT connects; expired, forged, revoked, and malformed JWTs fail.
-- [ ] Invalid envelopes, payloads, protocol versions, origins, and oversized messages are rejected without reaching services.
-- [ ] Two tabs join the same personal room and share identity safely.
-- [ ] Presence survives one of multiple sockets disconnecting and expires after the final socket disappears.
-- [ ] Acks preserve event/correlation identifiers.
-- [ ] Tokens and private payloads are absent from logs.
+- [x] Valid JWT connects; expired, forged, revoked, and malformed JWTs fail.
+- [x] Invalid envelopes, payloads, protocol versions, origins, and oversized messages are rejected without reaching services.
+- [x] Two tabs join the same personal room and share identity safely.
+- [x] Presence survives one of multiple sockets disconnecting and expires after the final socket disappears.
+- [x] Acks preserve event/correlation identifiers.
+- [x] Tokens and private payloads are absent from logs.
 
 ### Exit criteria
 
 - FR-3 is complete.
 - The realtime layer is a thin validated/authenticated adapter ready for matchmaking and game commands.
+
+> **Result:** Passed locally with strict format, lint, type, build, and unit
+> coverage gates plus the complete Docker-backed integration suite. Evidence
+> covers all v1 schemas, valid/invalid/revoked/expired authentication, exact
+> origins, the 8 KiB transport limit, distributed connection caps, correlated
+> acknowledgements, durable active-game hints, multi-tab presence, cross-node
+> Redis Streams delivery, final disconnect cleanup, and same-instance delivery
+> during adapter degradation. Matchmaking and game command handlers remain
+> intentionally unavailable until their owning phases.
 
 ---
 

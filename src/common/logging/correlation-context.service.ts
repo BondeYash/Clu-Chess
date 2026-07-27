@@ -9,8 +9,8 @@ export interface CorrelationStore {
 export class CorrelationContextService {
   private readonly storage = new AsyncLocalStorage<CorrelationStore>();
 
-  run(correlationId: string, callback: () => void): void {
-    this.storage.run({ correlationId }, callback);
+  run<Result>(correlationId: string, callback: () => Result): Result {
+    return this.storage.run({ correlationId }, callback);
   }
 
   get correlationId(): string | undefined {

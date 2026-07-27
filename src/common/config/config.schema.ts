@@ -74,6 +74,8 @@ const environmentSchema = z
     DRAIN_TIMEOUT_MS: duration(15_000),
     SOCKET_PING_INTERVAL_MS: duration(25_000),
     SOCKET_PING_TIMEOUT_MS: duration(20_000),
+    SOCKET_RECOVERY_MAX_DISCONNECTION_MS: duration(120_000),
+    SOCKET_ADAPTER_STREAM_MAX_LEN: count(10_000),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),
