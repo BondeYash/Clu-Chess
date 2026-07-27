@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { AppConfigService } from '../../common/config/app-config.service.js';
+import { GameLifecycleService } from '../game/game-lifecycle.service.js';
 import {
   IdentityGenerationError,
   IdentityService,
@@ -56,6 +57,7 @@ export class SessionService {
     private readonly repository: GuestSessionRepository,
     @Inject(GUEST_SOCKET_DISCONNECT_PORT)
     private readonly socketDisconnect: GuestSocketDisconnectPort,
+    private readonly gameLifecycle: GameLifecycleService,
     private readonly identityService: IdentityService,
     private readonly tokens: JwtTokenService,
     private readonly revocations: SessionRevocationService,
@@ -205,6 +207,7 @@ export class SessionService {
     guestSession: GuestSessionRecord,
     authenticatedGuest: AuthenticatedGuest,
   ): Promise<void> {
+    await this.gameLifecycle.terminateForReset(guestSession.id);
     await this.revocations.revoke(guestSession, authenticatedGuest);
     await this.socketDisconnect.disconnectGuest(guestSession.id);
   }

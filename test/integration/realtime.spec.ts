@@ -665,6 +665,231 @@ describe('authenticated realtime gateway', () => {
     ]);
   });
 
+  it('broadcasts resignation and returns its exact idempotent result', async () => {
+    const whiteSession = await createSession(serverA);
+    const blackSession = await createSession(appB.getHttpServer() as Server);
+    const allocated = await allocateGame(pool, {
+      guestSessionIds: [whiteSession.guest.id, blackSession.guest.id],
+    });
+    await pool.query(
+      `
+        UPDATE games
+        SET
+          status = 'WAITING_FOR_PLAYERS',
+          join_deadline_at = clock_timestamp() + interval '20 seconds'
+        WHERE id = $1
+      `,
+      [allocated.gameId],
+    );
+    const white = await connectClient(urlA, whiteSession.token);
+    const black = await connectClient(urlB, blackSession.token);
+    await emitWithAck(
+      white.socket,
+      'game.ready',
+      envelope('game.ready', {
+        gameId: allocated.gameId,
+        gameVersion: 0,
+      }),
+    );
+    const startedForWhite = waitForServerEvent(white.socket, 'game.started');
+    const startedForBlack = waitForServerEvent(black.socket, 'game.started');
+    await emitWithAck(
+      black.socket,
+      'game.ready',
+      envelope('game.ready', {
+        gameId: allocated.gameId,
+        gameVersion: 0,
+      }),
+    );
+    await Promise.all([startedForWhite, startedForBlack]);
+
+    const command = envelope('game.resign', {
+      gameId: allocated.gameId,
+      gameVersion: 2,
+    });
+    const endedForWhite = waitForServerEvent(white.socket, 'game.ended');
+    const endedForBlack = waitForServerEvent(black.socket, 'game.ended');
+    const accepted = await emitWithAck(black.socket, 'game.resign', command);
+
+    expect(accepted).toMatchObject({
+      gameVersion: 3,
+      ok: true,
+      payload: { result: 'white_win', termination: 'resignation' },
+      type: 'game.ended',
+    });
+    await expect(endedForWhite).resolves.toMatchObject({
+      gameId: allocated.gameId,
+      gameVersion: 3,
+      payload: { result: 'white_win', termination: 'resignation' },
+      type: 'game.ended',
+    });
+    await expect(endedForBlack).resolves.toMatchObject({
+      gameId: allocated.gameId,
+      gameVersion: 3,
+      payload: { result: 'white_win', termination: 'resignation' },
+      type: 'game.ended',
+    });
+
+    const replay = await emitWithAck(black.socket, 'game.resign', command);
+    expect(replay).toMatchObject({
+      gameVersion: accepted.gameVersion,
+      ok: true,
+      payload: accepted.ok ? accepted.payload : undefined,
+      type: 'game.ended',
+    });
+    const audit = await pool.query<{
+      assignments: number;
+      commands: number;
+      result: string;
+      termination: string;
+      version: number;
+    }>(
+      `
+        SELECT
+          game.result,
+          game.termination,
+          game.version,
+          (
+            SELECT count(*)::int
+            FROM game_commands
+            WHERE game_id = game.id
+          ) AS commands,
+          (
+            SELECT count(*)::int
+            FROM active_game_assignments
+            WHERE game_id = game.id
+          ) AS assignments
+        FROM games AS game
+        WHERE game.id = $1
+      `,
+      [allocated.gameId],
+    );
+    expect(audit.rows).toEqual([
+      {
+        assignments: 0,
+        commands: 1,
+        result: '1-0',
+        termination: 'RESIGNATION',
+        version: 3,
+      },
+    ]);
+  });
+
+  it('transitions the final socket through reconnecting and sends recovery state', async () => {
+    const whiteSession = await createSession(serverA);
+    const blackSession = await createSession(appB.getHttpServer() as Server);
+    const allocated = await allocateGame(pool, {
+      guestSessionIds: [whiteSession.guest.id, blackSession.guest.id],
+    });
+    await pool.query(
+      `
+        UPDATE games
+        SET
+          status = 'WAITING_FOR_PLAYERS',
+          join_deadline_at = clock_timestamp() + interval '20 seconds'
+        WHERE id = $1
+      `,
+      [allocated.gameId],
+    );
+    const white = await connectClient(urlA, whiteSession.token);
+    const black = await connectClient(urlB, blackSession.token);
+    await emitWithAck(
+      white.socket,
+      'game.ready',
+      envelope('game.ready', {
+        gameId: allocated.gameId,
+        gameVersion: 0,
+      }),
+    );
+    const startedForWhite = waitForServerEvent(white.socket, 'game.started');
+    const startedForBlack = waitForServerEvent(black.socket, 'game.started');
+    await emitWithAck(
+      black.socket,
+      'game.ready',
+      envelope('game.ready', {
+        gameId: allocated.gameId,
+        gameVersion: 0,
+      }),
+    );
+    await Promise.all([startedForWhite, startedForBlack]);
+
+    const disconnected = waitForServerEvent(
+      black.socket,
+      'player.disconnected',
+    );
+    white.socket.disconnect();
+    await expect(disconnected).resolves.toMatchObject({
+      gameId: allocated.gameId,
+      gameVersion: 3,
+      payload: {
+        clocksContinue: true,
+        color: 'white',
+      },
+      type: 'player.disconnected',
+    });
+
+    const reconnected = waitForServerEvent(black.socket, 'player.reconnected');
+    const recovery = socketClient(urlA, whiteSession.token, allowedOrigin);
+    clients.add(recovery);
+    const ready = waitForServerEvent(recovery, 'session.ready');
+    const snapshot = waitForServerEvent(recovery, 'game.snapshot');
+    const connected = new Promise<void>((resolve, reject) => {
+      recovery.once('connect', resolve);
+      recovery.once('connect_error', reject);
+    });
+    recovery.connect();
+    await connected;
+
+    await expect(reconnected).resolves.toMatchObject({
+      gameId: allocated.gameId,
+      gameVersion: 4,
+      payload: { color: 'white' },
+      type: 'player.reconnected',
+    });
+    await expect(ready).resolves.toMatchObject({
+      payload: { activeGameId: allocated.gameId },
+      type: 'session.ready',
+    });
+    await expect(snapshot).resolves.toMatchObject({
+      gameId: allocated.gameId,
+      gameVersion: 4,
+      payload: {
+        clocks: { running: 'white' },
+        status: 'IN_PROGRESS',
+        you: { color: 'white', connected: true },
+      },
+      type: 'game.snapshot',
+    });
+
+    const persisted = await pool.query<{
+      disconnectedPlayers: number;
+      reconnectDeadlineAt: Date | null;
+      status: string;
+      version: number;
+    }>(
+      `
+        SELECT
+          game.reconnect_deadline_at AS "reconnectDeadlineAt",
+          game.status,
+          game.version,
+          count(player.disconnected_at)::int AS "disconnectedPlayers"
+        FROM games AS game
+        JOIN game_players AS player ON player.game_id = game.id
+        WHERE game.id = $1
+        GROUP BY game.id
+      `,
+      [allocated.gameId],
+    );
+    expect(persisted.rows).toEqual([
+      {
+        disconnectedPlayers: 0,
+        reconnectDeadlineAt: null,
+        status: 'IN_PROGRESS',
+        version: 4,
+      },
+    ]);
+  });
+
   it('returns session.ready when an unscoped sync has no active game', async () => {
     const { socket } = await connectClient(
       urlA,

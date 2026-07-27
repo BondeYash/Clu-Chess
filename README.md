@@ -65,3 +65,6 @@ documented in
 Authoritative snapshots, move transactions, idempotent recovery, and
 board-driven endings are documented in
 [docs/gameplay-operations.md](docs/gameplay-operations.md).
+Durable deadlines, resignation, disconnect grace, no-shows, and non-move
+terminal cleanup are documented in
+[docs/game-lifecycle-operations.md](docs/game-lifecycle-operations.md).

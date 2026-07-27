@@ -10,6 +10,7 @@ import { REALTIME_COMMAND_HANDLER } from './application/ports/realtime-command-h
 import { REALTIME_DELIVERY_PORT } from './application/ports/realtime-delivery.port.js';
 import { BroadcastService } from './broadcast.service.js';
 import { ConnectionRegistryService } from './connection-registry.service.js';
+import { GameLifecycleDeliveryService } from './game-lifecycle-delivery.service.js';
 import { RealtimeRedisService } from './infrastructure/realtime-redis.service.js';
 import { RealtimeProtocolService } from './protocol/realtime-protocol.service.js';
 import { RealtimeAuthenticationService } from './realtime-authentication.service.js';
@@ -31,6 +32,7 @@ import { MatchmakingRealtimeService } from './matchmaking-realtime.service.js';
     ActiveGameLookupService,
     BroadcastService,
     ConnectionRegistryService,
+    GameLifecycleDeliveryService,
     MatchmakingRealtimeService,
     RealtimeAuthenticationService,
     RealtimeErrorMapperService,

@@ -15,6 +15,9 @@ import type {
   GameplayClock,
   StartedGame,
 } from '../game/application/ports/gameplay.repository.js';
+import { GameDeadlineService } from '../game/game-deadline.service.js';
+import { GameLifecycleDeliveryRegistry } from '../game/game-lifecycle-delivery.registry.js';
+import { GameLifecycleService } from '../game/game-lifecycle.service.js';
 import { GameMoveService } from '../game/game-move.service.js';
 import {
   GameRoomService,
@@ -33,7 +36,10 @@ import type {
 import { BroadcastService } from './broadcast.service.js';
 import { RealtimeProtocolService } from './protocol/realtime-protocol.service.js';
 import { RealtimeError } from './protocol/realtime.errors.js';
-import type { ClientEventEnvelope } from './protocol/protocol.schemas.js';
+import type {
+  ClientEventEnvelope,
+  ServerEventEnvelope,
+} from './protocol/protocol.schemas.js';
 
 type JobName = 'drain' | 'reconcile' | 'sweep';
 
@@ -53,6 +59,9 @@ export class MatchmakingRealtimeService
   constructor(
     private readonly broadcast: BroadcastService,
     private readonly config: AppConfigService,
+    private readonly deadlines: GameDeadlineService,
+    private readonly gameDelivery: GameLifecycleDeliveryRegistry,
+    private readonly gameLifecycle: GameLifecycleService,
     private readonly games: GameRoomService,
     private readonly matchmaking: MatchmakingService,
     private readonly moves: GameMoveService,
@@ -80,6 +89,8 @@ export class MatchmakingRealtimeService
         return this.syncGame(event, context);
       case 'move.submit':
         return this.submitMove(event, context);
+      case 'game.resign':
+        return this.resignGame(event, context);
       default:
         throw new RealtimeError(
           'SERVICE_UNAVAILABLE',
@@ -90,7 +101,11 @@ export class MatchmakingRealtimeService
   }
 
   async finallyDisconnected(guestSessionId: string): Promise<void> {
-    if (await this.matchmaking.finallyDisconnected(guestSessionId)) {
+    const [queueResult, gameResult] = await Promise.allSettled([
+      this.matchmaking.finallyDisconnected(guestSessionId),
+      this.gameLifecycle.disconnected(guestSessionId),
+    ]);
+    if (queueResult.status === 'fulfilled' && queueResult.value) {
       this.broadcast.toGuest(
         guestSessionId,
         this.protocol.createServerEvent({
@@ -98,6 +113,25 @@ export class MatchmakingRealtimeService
           type: 'queue.left',
         }),
       );
+    }
+    if (gameResult.status === 'fulfilled' && gameResult.value !== null) {
+      await this.deadlines.scheduleGame(gameResult.value.gameId);
+    }
+    if (queueResult.status === 'rejected') {
+      this.logger.warn(
+        { guestSessionId },
+        'Matchmaking disconnect cleanup failed',
+      );
+    }
+    if (gameResult.status === 'rejected') {
+      this.logger.warn({ guestSessionId }, 'Game disconnect transition failed');
+    }
+  }
+
+  async reconnected(guestSessionId: string): Promise<void> {
+    const event = await this.gameLifecycle.reconnected(guestSessionId);
+    if (event !== null) {
+      await this.deadlines.scheduleGame(event.gameId);
     }
   }
 
@@ -181,6 +215,7 @@ export class MatchmakingRealtimeService
             context.identity.guestSessionId,
           );
     await context.joinGameRoom(snapshot.game.id);
+    await this.deadlines.scheduleGame(snapshot.game.id);
     return this.snapshotResult(snapshot, context.identity.guestSessionId);
   }
 
@@ -257,13 +292,34 @@ export class MatchmakingRealtimeService
       }
       this.publishAccepted(submission.accepted);
       if (submission.ended !== null) {
-        this.publishEnded(submission.ended);
+        this.gameDelivery.gameEnded({
+          duplicate: false,
+          ended: submission.ended,
+          guestSessionIds: submission.guestSessionIds,
+        });
       }
     }
     return {
       gameVersion: submission.accepted.gameVersion,
       payload: this.acceptedPayload(submission.accepted),
       type: 'move.accepted',
+    };
+  }
+
+  private async resignGame(
+    event: Extract<ClientEventEnvelope, { type: 'game.resign' }>,
+    context: RealtimeCommandContext,
+  ): Promise<RealtimeCommandResult> {
+    const submission = await this.gameLifecycle.resign({
+      eventId: event.eventId,
+      expectedVersion: event.gameVersion,
+      gameId: event.gameId,
+      guestSessionId: context.identity.guestSessionId,
+    });
+    return {
+      gameVersion: submission.ended.gameVersion,
+      payload: this.endedPayload(submission.ended),
+      type: 'game.ended',
     };
   }
 
@@ -295,27 +351,6 @@ export class MatchmakingRealtimeService
         gameVersion: accepted.gameVersion,
         payload: this.acceptedPayload(accepted),
         type: 'move.accepted',
-      }),
-    );
-  }
-
-  private publishEnded(ended: EndedGame): void {
-    this.broadcast.toGame(
-      ended.gameId,
-      this.protocol.createServerEvent({
-        gameId: ended.gameId,
-        gameVersion: ended.gameVersion,
-        payload: {
-          clocks: {
-            ...this.wireClocks(ended.clocks),
-            running: null,
-          },
-          finalFen: ended.finalFen,
-          pgn: ended.pgn,
-          result: ended.result,
-          termination: ended.termination,
-        },
-        type: 'game.ended',
       }),
     );
   }
@@ -387,6 +422,22 @@ export class MatchmakingRealtimeService
     const [first, second] = allocation.players;
     this.publishMatchFound(allocation, first, second);
     this.publishMatchFound(allocation, second, first);
+    void this.deadlines.scheduleGame(allocation.game.id);
+  }
+
+  private endedPayload(
+    ended: EndedGame,
+  ): Extract<ServerEventEnvelope, { type: 'game.ended' }>['payload'] {
+    return {
+      clocks: {
+        ...this.wireClocks(ended.clocks),
+        running: null,
+      },
+      finalFen: ended.finalFen,
+      pgn: ended.pgn,
+      result: ended.result,
+      termination: ended.termination,
+    };
   }
 
   private publishMatchFound(

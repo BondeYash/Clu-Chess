@@ -6,4 +6,8 @@ export class NoopGuestPresenceObserver implements GuestPresenceObserver {
   finallyDisconnected(_guestSessionId: string): Promise<void> {
     return Promise.resolve();
   }
+
+  reconnected(_guestSessionId: string): Promise<void> {
+    return Promise.resolve();
+  }
 }

@@ -47,6 +47,10 @@ export class BroadcastService
     this.emit(gameRoom(gameId), event);
   }
 
+  leaveGame(gameId: string): void {
+    this.server?.in(gameRoom(gameId)).socketsLeave(gameRoom(gameId));
+  }
+
   toGuest(guestSessionId: string, event: ServerEventEnvelope): void {
     this.emit(guestRoom(guestSessionId), event);
   }

@@ -81,8 +81,9 @@ Gameplay maps expected failures to `move.rejected`:
 - `IDEMPOTENCY_KEY_REUSED`;
 - `SERVICE_UNAVAILABLE` for dependency or corrupt-state failures.
 
-Expired-clock moves never mutate game state. Phase 8 owns durable timeout
-adjudication and all non-move terminal commands.
+Expired-clock moves never mutate game state. Durable timeout adjudication and
+all non-move terminal commands are documented in
+[`game-lifecycle-operations.md`](game-lifecycle-operations.md).
 
 ## Verification
 

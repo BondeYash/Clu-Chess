@@ -8,6 +8,7 @@ import {
 import type { StartedGame } from './application/ports/gameplay.repository.js';
 import { clockViewAt, type ClockView } from './domain/game-clock.js';
 import { GameServiceError } from './domain/game-service.errors.js';
+import { GameDeadlineService } from './game-deadline.service.js';
 import { GameEphemeralStateService } from './game-ephemeral-state.service.js';
 
 export type GameSnapshotView = GameSnapshotRecord &
@@ -21,6 +22,7 @@ export type ReadyGameResult = Readonly<{
 @Injectable()
 export class GameRoomService {
   constructor(
+    private readonly deadlines: GameDeadlineService,
     private readonly ephemeralState: GameEphemeralStateService,
     @Inject(GAME_REPOSITORY)
     private readonly games: GameRepository,
@@ -91,8 +93,10 @@ export class GameRoomService {
         await this.ephemeralState.afterStart(gameId);
       }
     }
+    const snapshot = await this.snapshot(gameId, guestSessionId);
+    await this.deadlines.scheduleGame(gameId);
     return {
-      snapshot: await this.snapshot(gameId, guestSessionId),
+      snapshot,
       started,
     };
   }

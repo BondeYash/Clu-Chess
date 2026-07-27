@@ -14,11 +14,13 @@ export type GamePlayerRecord = Readonly<{
   avatarKey: string;
   color: PlayerColor;
   connectedAt: Date | null;
+  disconnectedAt: Date | null;
   displayName: string;
   gameId: string;
   guestSessionId: string;
   id: string;
   joinedAt: Date | null;
+  reconnectGraceEndsAt: Date | null;
   slot: 0 | 1;
 }>;
 

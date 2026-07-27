@@ -1,6 +1,6 @@
 # Realtime Operations
 
-> **Status:** Implemented through Phase 7
+> **Status:** Implemented through Phase 8
 > **Protocol authority:** [`protocol-v1.md`](protocol-v1.md)
 
 ## Runtime topology
@@ -56,11 +56,10 @@ Unexpected failures are mapped to stable public errors; tokens, raw private
 payloads, Redis URLs, and database details are never included.
 
 The command port handles heartbeat, FIFO queue join/leave, `game.ready`,
-guest-authorized `game.sync`, and authoritative `move.submit`. Matchmaking
-publishes `queue.left` and `match.found` through personal rooms across
-replicas. Gameplay publishes committed `game.started`, `move.accepted`, and
-board-driven `game.ended` events through game rooms. `game.resign` remains
-validated and rate-limited but returns `SERVICE_UNAVAILABLE` until Phase 8.
+guest-authorized `game.sync`, authoritative `move.submit`, and idempotent
+`game.resign`. Matchmaking publishes `queue.left` and `match.found` through
+personal rooms across replicas. Gameplay publishes committed `game.started`,
+`move.accepted`, lifecycle presence events, and `game.ended`.
 
 ## Presence and heartbeats
 
@@ -77,9 +76,11 @@ connection member. If a matchmaking queue guard exists, its TTL is refreshed
 in the same presence script. Expired members are pruned atomically.
 
 Multiple tabs create multiple members. Closing one tab leaves the guest
-present while another live member remains; the final disconnect deletes the
-empty presence key and invokes the replaceable final-disconnect observer for
-later game phases.
+present while another live member remains. The final disconnect deletes the
+empty presence key, durably transitions an active game to `RECONNECTING`, and
+emits `player.disconnected`. Authentication writes new presence before the
+durable reconnect transition, which cancels grace and emits
+`player.reconnected`.
 
 ## Delivery and recovery
 
@@ -97,10 +98,16 @@ again on a recovered connection (`skipMiddlewares: false`) so revocation is
 not bypassed. PostgreSQL remains authoritative; recovery never treats a room,
 presence member, or stream entry as game truth.
 
+An authenticated socket with an active assignment automatically joins its
+game room and receives `session.ready` followed by an authoritative
+`game.snapshot`. This also recreates the local deadline optimization.
+
 Match allocation and readiness recovery details are in
 [`matchmaking-operations.md`](matchmaking-operations.md).
 Move transaction and snapshot recovery details are in
 [`gameplay-operations.md`](gameplay-operations.md).
+Non-move endings and grace recovery are in
+[`game-lifecycle-operations.md`](game-lifecycle-operations.md).
 
 ## Verification
 

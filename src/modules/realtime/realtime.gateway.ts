@@ -6,6 +6,7 @@ import {
   WebSocketGateway,
 } from '@nestjs/websockets';
 import type { ExtendedError } from 'socket.io';
+import { randomUUID } from 'node:crypto';
 import { CorrelationContextService } from '../../common/logging/correlation-context.service.js';
 import { PresenceService } from '../presence/presence.service.js';
 import { GuestSocketDisconnectRegistry } from '../session/infrastructure/guest-socket-disconnect-registry.js';
@@ -22,6 +23,7 @@ import {
 import { BroadcastService } from './broadcast.service.js';
 import { ConnectionRegistryService } from './connection-registry.service.js';
 import { RealtimeProtocolService } from './protocol/realtime-protocol.service.js';
+import { PROTOCOL_VERSION } from './protocol/protocol.constants.js';
 import { RealtimeError } from './protocol/realtime.errors.js';
 import type {
   ClientEventEnvelope,
@@ -125,11 +127,22 @@ export class RealtimeGateway
     const identity = this.identity(socket);
     try {
       await socket.join(guestRoom(identity.guestSessionId));
+      await this.presenceObserver.reconnected(identity.guestSessionId);
       const event = await this.sessionReadyEvent(
         identity,
         socket.data.correlationId,
       );
       socket.emit(event.type, event);
+      if (
+        event.type === 'session.ready' &&
+        event.payload.activeGameId !== null
+      ) {
+        await this.emitInitialGameSnapshot(
+          socket,
+          identity,
+          event.payload.activeGameId,
+        );
+      }
     } catch (error) {
       this.emitServerError(
         socket,
@@ -241,6 +254,46 @@ export class RealtimeGateway
       },
       socketId: socket.id,
     });
+  }
+
+  private async emitInitialGameSnapshot(
+    socket: RealtimeSocket,
+    identity: Readonly<AuthenticatedSocketIdentity>,
+    gameId: string,
+  ): Promise<void> {
+    const result = await this.commands.execute(
+      {
+        eventId: randomUUID(),
+        gameId,
+        payload: {},
+        protocolVersion: PROTOCOL_VERSION,
+        timestamp: Date.now(),
+        type: 'game.sync',
+      },
+      {
+        identity,
+        joinGameRoom: async (authorizedGameId: string) => {
+          await socket.join(gameRoom(authorizedGameId));
+        },
+        leaveGameRoom: async (authorizedGameId: string) => {
+          await socket.leave(gameRoom(authorizedGameId));
+        },
+        socketId: socket.id,
+      },
+    );
+    if (result.type !== 'game.snapshot') {
+      throw new Error('Active game recovery did not return a snapshot.');
+    }
+    const snapshot = this.protocol.createServerEvent({
+      ...(socket.data.correlationId === undefined
+        ? {}
+        : { correlationId: socket.data.correlationId }),
+      gameId,
+      gameVersion: result.gameVersion,
+      payload: result.payload,
+      type: 'game.snapshot',
+    });
+    socket.emit(snapshot.type, snapshot);
   }
 
   private async sessionReadyEvent(

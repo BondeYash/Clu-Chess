@@ -566,11 +566,13 @@ export class PrismaGameRepository implements GameRepository {
       avatarKey: player.guestSession.avatarKey,
       color: player.color,
       connectedAt: player.connectedAt,
+      disconnectedAt: player.disconnectedAt,
       displayName: player.guestSession.displayName,
       gameId: player.gameId,
       guestSessionId: player.guestSessionId,
       id: player.id,
       joinedAt: player.joinedAt,
+      reconnectGraceEndsAt: player.reconnectGraceEndsAt,
       slot: player.slot,
     };
   }

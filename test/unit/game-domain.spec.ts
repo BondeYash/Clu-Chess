@@ -96,6 +96,12 @@ const LEGAL_TRANSITIONS: readonly LegalTransitionCase[] = [
   },
   {
     from: 'RECONNECTING',
+    to: 'RECONNECTING',
+    transition: 'PLAYER_DISCONNECTED',
+    versionDelta: 1,
+  },
+  {
+    from: 'RECONNECTING',
     to: 'IN_PROGRESS',
     transition: 'PLAYER_RECONNECTED',
     versionDelta: 1,

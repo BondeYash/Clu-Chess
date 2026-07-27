@@ -758,60 +758,69 @@ Complete every way a game can start, pause, resume, or end without relying on a 
 
 #### Resignation
 
-- [ ] Implement `game.resign` with a required idempotency/command ID.
-- [ ] Authorize membership and lock the game.
-- [ ] Apply a version/status guard and record winner, result, termination, ended time, and clock snapshot.
-- [ ] Return the original terminal result on retry.
+- [x] Implement `game.resign` with a required idempotency/command ID.
+- [x] Authorize membership and lock the game.
+- [x] Apply a version/status guard and record winner, result, termination, ended time, and clock snapshot.
+- [x] Return the original terminal result on retry.
 
 #### Timeout
 
-- [ ] Schedule the next expected flag fall as an optimization.
-- [ ] On timer fire, open a transaction and recompute flag fall from durable timestamps/clocks.
-- [ ] Let status/version guards settle races with moves, resignation, or another timer.
-- [ ] Recreate timers on boot/reconciliation and game sync.
-- [ ] Do not depend on Redis key expiry notifications for correctness.
+- [x] Schedule the next expected flag fall as an optimization.
+- [x] On timer fire, open a transaction and recompute flag fall from durable timestamps/clocks.
+- [x] Let status/version guards settle races with moves, resignation, or another timer.
+- [x] Recreate timers on boot/reconciliation and game sync.
+- [x] Do not depend on Redis key expiry notifications for correctness.
 
 #### Join deadline and no-show
 
-- [ ] Schedule/scan the initial join deadline.
-- [ ] Apply the approved result for one or both missing players.
-- [ ] Persist `EXPIRED` and terminal fields idempotently.
-- [ ] Delete durable active assignments in the same terminal transaction and release Redis state only after commit.
+- [x] Schedule/scan the initial join deadline.
+- [x] Apply the approved result for one or both missing players.
+- [x] Persist `EXPIRED` and terminal fields idempotently.
+- [x] Delete durable active assignments in the same terminal transaction and release Redis state only after commit.
 
 #### Disconnect/reconnect grace
 
-- [ ] Detect guest absence only after all that guest's sockets are gone.
-- [ ] Persist or derive the approved `RECONNECTING` behavior.
-- [ ] Create a Redis grace deadline plus an in-process timer/periodic scan.
-- [ ] Emit `player.disconnected` after the state change and `player.reconnected` after successful recovery.
-- [ ] Pause or continue clocks according to Gate C.
-- [ ] Cancel/ignore stale grace work when the guest reconnects.
-- [ ] After grace, transact abandonment only if the player is still absent and the game is eligible.
-- [ ] Resolve double-disconnect and clock-expiry races according to Gate F.
+- [x] Detect guest absence only after all that guest's sockets are gone.
+- [x] Persist or derive the approved `RECONNECTING` behavior.
+- [x] Create a Redis grace deadline plus an in-process timer/periodic scan.
+- [x] Emit `player.disconnected` after the state change and `player.reconnected` after successful recovery.
+- [x] Pause or continue clocks according to Gate C.
+- [x] Cancel/ignore stale grace work when the guest reconnects.
+- [x] After grace, transact abandonment only if the player is still absent and the game is eligible.
+- [x] Resolve double-disconnect and clock-expiry races according to Gate F.
 
 #### Terminal cleanup
 
-- [ ] Ensure every non-move terminal transaction deletes durable active-game assignments atomically with the terminal game update.
-- [ ] In a post-commit idempotent cleanup step:
+- [x] Ensure every non-move terminal transaction deletes durable active-game assignments atomically with the terminal game update.
+- [x] In a post-commit idempotent cleanup step:
   - clear active-game cache keys;
   - reset user state;
   - invalidate snapshot cache;
   - emit `game.ended`;
   - remove sockets from the game room after ack or a bounded delay.
-- [ ] Ensure cleanup can be retried by the reconciler.
+- [x] Ensure cleanup can be retried by the reconciler.
 
 ### Verification
 
-- [ ] Resignation, timeout, no-show, single abandonment, double abandonment, and reset-during-game have integration tests.
-- [ ] Simultaneous terminal attempts produce one database result.
-- [ ] Restarting the process does not prevent a clock timeout or grace expiry from eventually resolving.
-- [ ] Multiple tabs obey presence semantics.
-- [ ] Terminal cleanup is repeatable and leaves no durable active assignment.
+- [x] Resignation, timeout, no-show, single abandonment, double abandonment, and reset-during-game have integration tests.
+- [x] Simultaneous terminal attempts produce one database result.
+- [x] Restarting the process does not prevent a clock timeout or grace expiry from eventually resolving.
+- [x] Multiple tabs obey presence semantics.
+- [x] Terminal cleanup is repeatable and leaves no durable active assignment.
 
 ### Exit criteria
 
 - FR-10 is complete for all MVP termination reasons.
 - The backend can reach a correct terminal state despite timer duplication or process loss.
+
+> **Result:** Passed the strict static, unit coverage, production build, and
+> Docker-backed integration gates. PostgreSQL now serializes every non-move
+> terminal path and exact resignation replay, while leaderless deadline
+> timers/sweeps recover timeout, no-show, and disconnect grace work after
+> process loss. Final-socket presence, continued reconnect clocks, automatic
+> snapshot recovery, reset abandonment, idempotent Redis cleanup, bounded room
+> removal, cross-instance events, and competing terminal attempts are covered
+> against real PostgreSQL and Redis.
 
 ---
 

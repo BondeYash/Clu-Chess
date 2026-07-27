@@ -72,7 +72,7 @@ const TRANSITION_RULES: Readonly<Record<GameTransition, TransitionRule>> = {
     versionDelta: 1,
   },
   PLAYER_DISCONNECTED: {
-    from: ['IN_PROGRESS'],
+    from: ['IN_PROGRESS', 'RECONNECTING'],
     to: 'RECONNECTING',
     versionDelta: 1,
   },

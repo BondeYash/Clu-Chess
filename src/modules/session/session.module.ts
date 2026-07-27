@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { GameModule } from '../game/game.module.js';
 import { IdentityModule } from '../identity/identity.module.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
 import { GUEST_SESSION_REPOSITORY } from './application/ports/guest-session.repository.js';
@@ -27,7 +28,7 @@ import { SessionService } from './session.service.js';
     SessionRevocationService,
     GuestSocketDisconnectRegistry,
   ],
-  imports: [IdentityModule, PersistenceModule],
+  imports: [GameModule, IdentityModule, PersistenceModule],
   providers: [
     JwtTokenService,
     PrismaGuestSessionRepository,

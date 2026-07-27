@@ -590,7 +590,19 @@ export class PrismaGameplayRepository implements GameplayRepository {
   }
 
   private persistedTermination(termination: GameTermination): string {
-    return termination.toUpperCase();
+    const terminations: Readonly<Record<GameTermination, string>> = {
+      abandonment: 'ABANDONMENT',
+      checkmate: 'CHECKMATE',
+      double_abandon: 'SYSTEM',
+      fifty_move: 'FIFTY_MOVE_RULE',
+      insufficient_material: 'INSUFFICIENT_MATERIAL',
+      no_show: 'JOIN_TIMEOUT',
+      resignation: 'RESIGNATION',
+      stalemate: 'STALEMATE',
+      threefold_repetition: 'THREEFOLD_REPETITION',
+      timeout: 'TIMEOUT',
+    };
+    return terminations[termination];
   }
 
   private rejected(
