@@ -7,8 +7,13 @@ import type {
 
 export type { GameStatus, PlayerColor } from '../../domain/game.types.js';
 
+export const GAME_REPOSITORY = Symbol('GAME_REPOSITORY');
+
 export type GamePlayerRecord = Readonly<{
+  avatarKey: string;
   color: PlayerColor;
+  connectedAt: Date | null;
+  displayName: string;
   gameId: string;
   guestSessionId: string;
   id: string;
@@ -21,9 +26,14 @@ export type GameRecord = Readonly<{
   currentFen: string;
   endedAt: Date | null;
   id: string;
+  initialFen: string;
   incrementMs: number;
+  joinDeadlineAt: Date | null;
   matchId: string;
+  mode: 'BLITZ';
+  pgn: string;
   result: GameResult | null;
+  startedAt: Date | null;
   status: GameStatus;
   termination: GameTermination | null;
   timeInitialMs: number;
@@ -35,9 +45,13 @@ export type GameRecord = Readonly<{
 
 export type AllocateGame = Readonly<{
   blackGuestSessionId: string;
+  gameId: string;
   initialFen: string;
   joinDeadlineAt: Date;
   matchId: string;
+  mode: 'BLITZ';
+  observedAt: Date;
+  pgn: string;
   timeIncrementMs: number;
   timeInitialMs: number;
   whiteGuestSessionId: string;
@@ -46,6 +60,18 @@ export type AllocateGame = Readonly<{
 export type GameAllocation = Readonly<{
   game: GameRecord;
   players: readonly [GamePlayerRecord, GamePlayerRecord];
+}>;
+
+export type GuestMatchEligibility = Readonly<{
+  activeGameId: string | null;
+  eligible: boolean;
+}>;
+
+export type MarkGameReady = Readonly<{
+  expectedVersion: number;
+  gameId: string;
+  guestSessionId: string;
+  observedAt: Date;
 }>;
 
 export type UpdateGameAtVersion = Readonly<{
@@ -67,5 +93,11 @@ export interface GameRepository {
   allocate(input: AllocateGame): Promise<GameAllocation>;
   findById(gameId: string): Promise<GameAllocation | null>;
   findByMatchId(matchId: string): Promise<GameAllocation | null>;
+  findActiveAllocations(limit: number): Promise<readonly GameAllocation[]>;
+  getGuestMatchEligibility(
+    guestSessionId: string,
+    observedAt: Date,
+  ): Promise<GuestMatchEligibility>;
+  markReady(input: MarkGameReady): Promise<GameAllocation>;
   updateAtVersion(input: UpdateGameAtVersion): Promise<GameRecord | null>;
 }

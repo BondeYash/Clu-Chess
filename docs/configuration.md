@@ -1,6 +1,6 @@
 # CluChess Configuration Contract
 
-> **Status:** Accepted for implementation
+> **Status:** Implemented through Phase 6
 > **Goal:** No manual local environment or external-service setup
 
 ## 1. Zero-touch local workflow
@@ -76,6 +76,7 @@ All duration values use explicit millisecond or second suffixes. Startup validat
 | `PRESENCE_TTL_MS`                      | `45000`                    | shorter integration value | default `45000`             |
 | `QUEUE_GUARD_TTL_MS`                   | `120000`                   | shorter integration value | default `120000`            |
 | `QUEUE_MAX_WAIT_MS`                    | `120000`                   | shorter integration value | default `120000`            |
+| `MATCH_STATE_TTL_MS`                   | `3600000`                  | shorter integration value | default `3600000`           |
 | `SNAPSHOT_CACHE_TTL_MS`                | `60000`                    | shorter integration value | default `60000`             |
 | `MAX_WS_BUFFER_BYTES`                  | `8192`                     | `8192`                    | maximum `8192` for v1       |
 | `DRAIN_TIMEOUT_MS`                     | `15000`                    | `1000`                    | default `15000`             |
@@ -151,6 +152,7 @@ Required relationships:
 
 - `PRESENCE_TTL_MS` is greater than one application heartbeat interval;
 - `QUEUE_GUARD_TTL_MS` is greater than `PRESENCE_TTL_MS`;
+- `MATCH_STATE_TTL_MS` is greater than `RESERVATION_TTL_MS`;
 - retiring JWT verification keys remain mounted for `JWT_TTL_SECONDS + JWT_CLOCK_SKEW_SECONDS`;
 - `DRAIN_TIMEOUT_MS` exceeds the database transaction timeout;
 - all clocks, grace, and deadline values are positive; increments may be zero.

@@ -59,3 +59,6 @@ Guest-token rotation, revocation, cookies, and retention are documented in
 Socket authentication, protocol boundaries, presence, and multi-instance
 delivery are documented in
 [docs/realtime-operations.md](docs/realtime-operations.md).
+FIFO queueing, durable allocation, failure recovery, and room readiness are
+documented in
+[docs/matchmaking-operations.md](docs/matchmaking-operations.md).

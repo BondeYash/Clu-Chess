@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { GameServiceError } from '../game/domain/game-service.errors.js';
+import { MatchmakingError } from '../matchmaking/domain/matchmaking.errors.js';
 import { DatabaseError } from '../persistence/database-errors.js';
 import { RealtimeRedisUnavailableError } from './infrastructure/realtime-redis.errors.js';
 import { RealtimeError } from './protocol/realtime.errors.js';
@@ -32,6 +34,35 @@ export class RealtimeErrorMapperService {
         responseType: 'server.error',
       };
     }
+    if (error instanceof MatchmakingError) {
+      return {
+        error: {
+          code:
+            error.code === 'ALREADY_IN_GAME'
+              ? 'ALREADY_IN_GAME'
+              : 'SERVICE_UNAVAILABLE',
+          message: error.message,
+          retryable: error.retryable,
+        },
+        responseType: 'server.error',
+      };
+    }
+    if (error instanceof GameServiceError) {
+      return {
+        error: {
+          ...(error.authoritativeVersion === undefined
+            ? {}
+            : { authoritativeVersion: error.authoritativeVersion }),
+          code: this.gameErrorCode(error),
+          message: error.message,
+          retryable: error.retryable,
+        },
+        ...(error.authoritativeVersion === undefined
+          ? {}
+          : { gameVersion: error.authoritativeVersion }),
+        responseType: 'server.error',
+      };
+    }
     if (error instanceof DatabaseError) {
       return {
         error: {
@@ -54,6 +85,28 @@ export class RealtimeErrorMapperService {
       },
       responseType: 'server.error',
     };
+  }
+
+  private gameErrorCode(
+    error: GameServiceError,
+  ):
+    | 'ALREADY_IN_GAME'
+    | 'GAME_NOT_FOUND'
+    | 'NOT_A_PLAYER'
+    | 'SERVICE_UNAVAILABLE'
+    | 'STALE_GAME_VERSION' {
+    switch (error.code) {
+      case 'GAME_NOT_FOUND':
+        return 'GAME_NOT_FOUND';
+      case 'NOT_A_PLAYER':
+        return 'NOT_A_PLAYER';
+      case 'STALE_GAME_VERSION':
+        return 'STALE_GAME_VERSION';
+      case 'GUEST_ALREADY_IN_GAME':
+        return 'ALREADY_IN_GAME';
+      default:
+        return 'SERVICE_UNAVAILABLE';
+    }
   }
 
   private payload(error: RealtimeError): ProtocolErrorPayload {

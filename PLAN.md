@@ -594,69 +594,77 @@ Match exactly two distinct, present, eligible guests once and create exactly one
 
 #### Redis script layer
 
-- [ ] Implement and version-control Lua scripts for:
+- [x] Implement and version-control Lua scripts for:
   - enqueue;
   - leave;
   - try-match;
   - finalize;
   - rollback/release;
   - any compare-and-delete lease operation approved in Phase 0.
-- [ ] Pass explicit keys/arguments and validate every script response.
-- [ ] Load scripts by SHA with safe `NOSCRIPT` reload behavior.
-- [ ] Preserve original enqueue score on idempotent duplicate joins and rollbacks.
-- [ ] Make `try-match` discard/skip stale or absent candidates before reserving a pair.
-- [ ] Validate reservation ownership/members during finalize and rollback.
-- [ ] Apply the documented TTLs to guards, user states, reservations, and presence.
-- [ ] Keep the single-node Redis MVP key scheme compatible with the documented `{mm}` Cluster migration.
+- [x] Pass explicit keys/arguments and validate every script response.
+- [x] Load scripts by SHA with safe `NOSCRIPT` reload behavior.
+- [x] Preserve original enqueue score on idempotent duplicate joins and rollbacks.
+- [x] Make `try-match` discard/skip stale or absent candidates before reserving a pair.
+- [x] Validate reservation ownership/members during finalize and rollback.
+- [x] Apply the documented TTLs to guards, user states, reservations, and presence.
+- [x] Keep the single-node Redis MVP key scheme compatible with the documented `{mm}` Cluster migration.
 
 #### Matchmaking service
 
-- [ ] Implement idempotent `queue.join` and `queue.leave`.
-- [ ] Reject guests with a durable active assignment even if Redis state is missing.
-- [ ] Require present/connected guests for enqueue and re-enqueue.
-- [ ] Trigger `tryMatch` after successful enqueue.
-- [ ] Add the low-frequency backlog drainer without allowing concurrent double assignment.
-- [ ] Implement FIFO fairness with atomic `ZPOPMIN`; defer optional oldest-plus-next-K randomization until strict FIFO is proven.
-- [ ] Remove stale/disconnected/max-wait queue entries.
-- [ ] Notify personal guest rooms of queue state changes.
+- [x] Implement idempotent `queue.join` and `queue.leave`.
+- [x] Reject guests with a durable active assignment even if Redis state is missing.
+- [x] Require present/connected guests for enqueue and re-enqueue.
+- [x] Trigger `tryMatch` after successful enqueue.
+- [x] Add the low-frequency backlog drainer without allowing concurrent double assignment.
+- [x] Implement FIFO fairness with atomic `ZPOPMIN`; defer optional oldest-plus-next-K randomization until strict FIFO is proven.
+- [x] Remove stale/disconnected/max-wait queue entries.
+- [x] Notify personal guest rooms of queue state changes.
 
 #### Durable game allocation
 
-- [ ] Generate server-side match/game IDs and random colors.
-- [ ] In one PostgreSQL transaction:
+- [x] Generate server-side match/game IDs and random colors.
+- [x] In one PostgreSQL transaction:
   - make allocation idempotent by match key;
   - claim both guests as active;
   - create one game;
   - insert exactly two distinct players with opposite colors and slots;
   - set the initial position, version, status, and clocks.
-- [ ] Finalize the Redis reservation only after PostgreSQL commits.
-- [ ] On finalize failure, retain enough durable information for reconciliation instead of deleting the committed game.
-- [ ] On database failure before commit, roll back/release the reservation and re-enqueue only guests still present.
-- [ ] Emit `match.found` to each guest with their own color/opponent view and join deadline.
+- [x] Finalize the Redis reservation only after PostgreSQL commits.
+- [x] On finalize failure, retain enough durable information for reconciliation instead of deleting the committed game.
+- [x] On database failure before commit, roll back/release the reservation and re-enqueue only guests still present.
+- [x] Emit `match.found` to each guest with their own color/opponent view and join deadline.
 
 #### Initial room readiness
 
-- [ ] Implement `game.ready` membership authorization.
-- [ ] Join the authorized socket to `game:{gameId}`.
-- [ ] Record player join/readiness under the approved persistence policy.
-- [ ] Transition to `READY` only when both distinct players satisfy the readiness rule.
-- [ ] Make repeated readiness idempotent.
+- [x] Implement `game.ready` membership authorization.
+- [x] Join the authorized socket to `game:{gameId}`.
+- [x] Record player join/readiness under the approved persistence policy.
+- [x] Transition to `READY` only when both distinct players satisfy the readiness rule.
+- [x] Make repeated readiness idempotent.
 
 ### Verification
 
-- [ ] Real-Redis tests cover script atomicity, errors, TTLs, and rollback.
-- [ ] Parallel match attempts from two service instances never reuse a guest.
-- [ ] A guest cannot join two queues or two active games even when Redis keys are deleted between requests.
-- [ ] A guest cannot be matched with self.
-- [ ] Duplicate `queue.join`, `queue.leave`, `game.ready`, finalize, and rollback are safe.
-- [ ] Crash simulation after database commit/before Redis finalize recovers the same game.
-- [ ] Room-creation failure re-enqueues only eligible connected guests with fair scores.
-- [ ] Exactly two opposite-color player rows exist for every created game.
+- [x] Real-Redis tests cover script atomicity, errors, TTLs, and rollback.
+- [x] Parallel match attempts from two service instances never reuse a guest.
+- [x] A guest cannot join two queues or two active games even when Redis keys are deleted between requests.
+- [x] A guest cannot be matched with self.
+- [x] Duplicate `queue.join`, `queue.leave`, `game.ready`, finalize, and rollback are safe.
+- [x] Crash simulation after database commit/before Redis finalize recovers the same game.
+- [x] Room-creation failure re-enqueues only eligible connected guests with fair scores.
+- [x] Exactly two opposite-color player rows exist for every created game.
 
 ### Exit criteria
 
 - FR-4, FR-5, FR-6, and the matchmaking portion of FR-12 are complete.
 - Match allocation is safe across instances and process crashes.
+
+> **Result:** Passed the strict format, lint, type, build, and unit coverage
+> gates plus 50 Docker-backed integration tests. Redis Lua provides atomic FIFO
+> queueing, presence-aware reservation, validated finalize/rollback, and
+> leaderless cleanup. PostgreSQL provides idempotent two-player allocation and
+> durable one-active-game enforcement; reconciliation repairs commit/finalize
+> crashes and Redis loss. Cross-instance `match.found` and idempotent
+> two-player room readiness are operational.
 
 ---
 

@@ -1,6 +1,6 @@
 # Realtime Operations
 
-> **Status:** Phase 4 implementation contract
+> **Status:** Implemented through Phase 6
 > **Protocol authority:** [`protocol-v1.md`](protocol-v1.md)
 
 ## Runtime topology
@@ -55,11 +55,12 @@ propagated correlation ID, and is the authoritative response to that caller.
 Unexpected failures are mapped to stable public errors; tokens, raw private
 payloads, Redis URLs, and database details are never included.
 
-Phase 4 handles heartbeat directly and can return `session.ready` for an
-unscoped `game.sync` when no active game exists. Matchmaking and game commands
-are already validated and rate-limited, but intentionally return
-`SERVICE_UNAVAILABLE` until their owning implementation phases replace the
-command port.
+The command port handles heartbeat, FIFO queue join/leave, `game.ready`, and
+guest-authorized `game.sync`. Matchmaking publishes `queue.left` and
+`match.found` through personal rooms across replicas. `move.submit` and
+`game.resign` remain validated and rate-limited but return
+`SERVICE_UNAVAILABLE` until Phase 7 installs the authoritative gameplay
+transaction.
 
 ## Presence and heartbeats
 
@@ -95,6 +96,9 @@ Connection-state recovery is bounded by
 again on a recovered connection (`skipMiddlewares: false`) so revocation is
 not bypassed. PostgreSQL remains authoritative; recovery never treats a room,
 presence member, or stream entry as game truth.
+
+Match allocation and readiness recovery details are in
+[`matchmaking-operations.md`](matchmaking-operations.md).
 
 ## Verification
 

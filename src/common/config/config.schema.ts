@@ -64,6 +64,7 @@ const environmentSchema = z
     PRESENCE_TTL_MS: duration(45_000),
     QUEUE_GUARD_TTL_MS: duration(120_000),
     QUEUE_MAX_WAIT_MS: duration(120_000),
+    MATCH_STATE_TTL_MS: duration(3_600_000),
     SNAPSHOT_CACHE_TTL_MS: duration(60_000),
     MAX_WS_BUFFER_BYTES: z.coerce
       .number()
@@ -147,6 +148,14 @@ const environmentSchema = z
         code: 'custom',
         message: 'must exceed PRESENCE_TTL_MS',
         path: ['QUEUE_GUARD_TTL_MS'],
+      });
+    }
+
+    if (environment.MATCH_STATE_TTL_MS <= environment.RESERVATION_TTL_MS) {
+      context.addIssue({
+        code: 'custom',
+        message: 'must exceed RESERVATION_TTL_MS',
+        path: ['MATCH_STATE_TTL_MS'],
       });
     }
 

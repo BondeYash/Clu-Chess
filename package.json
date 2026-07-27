@@ -11,7 +11,7 @@
   },
   "packageManager": "npm@11.16.0",
   "scripts": {
-    "build": "npm run prisma:generate && tsc -p tsconfig.build.json",
+    "build": "npm run prisma:generate && tsc -p tsconfig.build.json && node scripts/copy-runtime-assets.mjs",
     "clean": "node scripts/clean.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

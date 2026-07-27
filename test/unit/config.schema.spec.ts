@@ -62,6 +62,12 @@ describe('application configuration', () => {
     ).toThrow('QUEUE_GUARD_TTL_MS');
     expect(() =>
       parseEnvironment({
+        MATCH_STATE_TTL_MS: '30000',
+        RESERVATION_TTL_MS: '30000',
+      }),
+    ).toThrow('MATCH_STATE_TTL_MS');
+    expect(() =>
+      parseEnvironment({
         DATABASE_TX_TIMEOUT_MS: '4000',
         DRAIN_TIMEOUT_MS: '4000',
       }),

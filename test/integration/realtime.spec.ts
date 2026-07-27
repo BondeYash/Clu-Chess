@@ -275,6 +275,184 @@ describe('authenticated realtime gateway', () => {
     });
   });
 
+  it('matches guests across instances and persists idempotent room readiness', async () => {
+    const sessionA = await createSession(serverA);
+    const sessionB = await createSession(appB.getHttpServer() as Server);
+    const clientA = await connectClient(urlA, sessionA.token);
+    const clientB = await connectClient(urlB, sessionB.token);
+
+    const firstJoin = await emitWithAck(
+      clientA.socket,
+      'queue.join',
+      envelope('queue.join', { payload: { mode: 'blitz' } }),
+    );
+    const duplicateJoin = await emitWithAck(
+      clientA.socket,
+      'queue.join',
+      envelope('queue.join', { payload: { mode: 'blitz' } }),
+    );
+    expect(firstJoin).toMatchObject({
+      ok: true,
+      payload: { mode: 'blitz', position: 1 },
+      type: 'queue.joined',
+    });
+    expect(duplicateJoin).toMatchObject({
+      ok: true,
+      payload: {
+        mode: 'blitz',
+        position: 1,
+        since:
+          firstJoin.ok && firstJoin.type === 'queue.joined'
+            ? firstJoin.payload.since
+            : undefined,
+      },
+      type: 'queue.joined',
+    });
+
+    const matchForA = waitForServerEvent(clientA.socket, 'match.found');
+    const matchForB = waitForServerEvent(clientB.socket, 'match.found');
+    const leftForA = waitForServerEvent(clientA.socket, 'queue.left');
+    const leftForB = waitForServerEvent(clientB.socket, 'queue.left');
+    const secondJoin = await emitWithAck(
+      clientB.socket,
+      'queue.join',
+      envelope('queue.join', { payload: { mode: 'blitz' } }),
+    );
+    expect(secondJoin).toMatchObject({
+      ok: true,
+      payload: { mode: 'blitz', position: 2 },
+      type: 'queue.joined',
+    });
+
+    const [foundA, foundB] = await Promise.all([matchForA, matchForB]);
+    expect(await leftForA).toMatchObject({
+      payload: { mode: 'blitz', reason: 'matched' },
+    });
+    expect(await leftForB).toMatchObject({
+      payload: { mode: 'blitz', reason: 'matched' },
+    });
+    if (foundA.type !== 'match.found' || foundB.type !== 'match.found') {
+      throw new Error('Matchmaking did not publish match.found');
+    }
+    expect(foundA.gameId).toBe(foundB.gameId);
+    expect([foundA.payload.color, foundB.payload.color].sort()).toEqual([
+      'black',
+      'white',
+    ]);
+    expect(foundA.payload.opponent.name).toBe(sessionB.guest.name);
+    expect(foundB.payload.opponent.name).toBe(sessionA.guest.name);
+
+    const persisted = await pool.query<{
+      assignments: number;
+      colors: string[];
+      players: number;
+      status: string;
+      version: number;
+    }>(
+      `
+        SELECT
+          game.status,
+          game.version,
+          count(DISTINCT player.id)::int AS players,
+          count(DISTINCT assignment.guest_session_id)::int AS assignments,
+          array_agg(DISTINCT player.color ORDER BY player.color) AS colors
+        FROM games AS game
+        JOIN game_players AS player ON player.game_id = game.id
+        JOIN active_game_assignments AS assignment
+          ON assignment.game_id = game.id
+        WHERE game.id = $1
+        GROUP BY game.id
+      `,
+      [foundA.gameId],
+    );
+    expect(persisted.rows).toEqual([
+      {
+        assignments: 2,
+        colors: ['b', 'w'],
+        players: 2,
+        status: 'WAITING_FOR_PLAYERS',
+        version: 0,
+      },
+    ]);
+
+    const readyA = await emitWithAck(
+      clientA.socket,
+      'game.ready',
+      envelope('game.ready', {
+        gameId: foundA.gameId,
+        gameVersion: foundA.gameVersion,
+      }),
+    );
+    expect(readyA).toMatchObject({
+      gameVersion: 0,
+      ok: true,
+      payload: { status: 'WAITING_FOR_PLAYERS' },
+      type: 'game.snapshot',
+    });
+
+    const readyB = await emitWithAck(
+      clientB.socket,
+      'game.ready',
+      envelope('game.ready', {
+        gameId: foundB.gameId,
+        gameVersion: foundB.gameVersion,
+      }),
+    );
+    expect(readyB).toMatchObject({
+      gameVersion: 1,
+      ok: true,
+      payload: { status: 'READY' },
+      type: 'game.snapshot',
+    });
+
+    const repeatedReady = await emitWithAck(
+      clientA.socket,
+      'game.ready',
+      envelope('game.ready', {
+        gameId: foundA.gameId,
+        gameVersion: foundA.gameVersion,
+      }),
+    );
+    expect(repeatedReady).toMatchObject({
+      gameVersion: 1,
+      ok: true,
+      payload: { status: 'READY' },
+      type: 'game.snapshot',
+    });
+
+    const readyRows = await pool.query<{
+      joinedPlayers: number;
+      status: string;
+      version: number;
+    }>(
+      `
+        SELECT
+          game.status,
+          game.version,
+          count(player.joined_at)::int AS "joinedPlayers"
+        FROM games AS game
+        JOIN game_players AS player ON player.game_id = game.id
+        WHERE game.id = $1
+        GROUP BY game.id
+      `,
+      [foundA.gameId],
+    );
+    expect(readyRows.rows).toEqual([
+      { joinedPlayers: 2, status: 'READY', version: 1 },
+    ]);
+
+    await redis.connection.flushdb();
+    const rejectedRejoin = await emitWithAck(
+      clientA.socket,
+      'queue.join',
+      envelope('queue.join', { payload: { mode: 'blitz' } }),
+    );
+    expect(rejectedRejoin).toMatchObject({
+      error: { code: 'ALREADY_IN_GAME', retryable: false },
+      ok: false,
+    });
+  });
+
   it('returns session.ready when an unscoped sync has no active game', async () => {
     const { socket } = await connectClient(
       urlA,

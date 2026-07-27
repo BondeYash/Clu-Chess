@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { GameModule } from '../game/game.module.js';
+import { MatchmakingModule } from '../matchmaking/matchmaking.module.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
 import { PresenceModule } from '../presence/presence.module.js';
 import { SessionModule } from '../session/session.module.js';
@@ -14,31 +16,35 @@ import { RealtimeAuthenticationService } from './realtime-authentication.service
 import { RealtimeErrorMapperService } from './realtime-error-mapper.service.js';
 import { RealtimeGateway } from './realtime.gateway.js';
 import { RealtimeRateLimitService } from './realtime-rate-limit.service.js';
-import { NoopGuestPresenceObserver } from './noop-guest-presence.observer.js';
-import { UnavailableRealtimeCommandHandler } from './unavailable-realtime-command.handler.js';
+import { MatchmakingRealtimeService } from './matchmaking-realtime.service.js';
 
 @Module({
   exports: [BroadcastService, REALTIME_DELIVERY_PORT, RealtimeRedisService],
-  imports: [PersistenceModule, PresenceModule, SessionModule],
+  imports: [
+    GameModule,
+    MatchmakingModule,
+    PersistenceModule,
+    PresenceModule,
+    SessionModule,
+  ],
   providers: [
     ActiveGameLookupService,
     BroadcastService,
     ConnectionRegistryService,
-    NoopGuestPresenceObserver,
+    MatchmakingRealtimeService,
     RealtimeAuthenticationService,
     RealtimeErrorMapperService,
     RealtimeGateway,
     RealtimeProtocolService,
     RealtimeRateLimitService,
     RealtimeRedisService,
-    UnavailableRealtimeCommandHandler,
     {
       provide: GUEST_PRESENCE_OBSERVER,
-      useExisting: NoopGuestPresenceObserver,
+      useExisting: MatchmakingRealtimeService,
     },
     {
       provide: REALTIME_COMMAND_HANDLER,
-      useExisting: UnavailableRealtimeCommandHandler,
+      useExisting: MatchmakingRealtimeService,
     },
     {
       provide: REALTIME_DELIVERY_PORT,
