@@ -1,6 +1,6 @@
 # Realtime Operations
 
-> **Status:** Implemented through Phase 8
+> **Status:** Implemented through Phase 10
 > **Protocol authority:** [`protocol-v1.md`](protocol-v1.md)
 
 ## Runtime topology
@@ -17,11 +17,17 @@ from `ORIGIN_ALLOWLIST` and a secure connection, either direct TLS or the
 trusted ingress `X-Forwarded-Proto: https` signal.
 
 No host datastore, environment file, key generation, or external account is
-needed:
+needed for either the single-instance or two-replica topology:
 
 ```bash
 docker compose up --build
+docker compose -f compose.multi.yaml up --build
 ```
+
+The scale topology terminates WSS at Nginx, repeats the application origin and
+payload checks, and uses a dedicated sticky route cookie for the polling
+fallback. Clients should select WebSocket transport whenever supported. See
+[`scaling-operations.md`](scaling-operations.md).
 
 ## Connection lifecycle
 

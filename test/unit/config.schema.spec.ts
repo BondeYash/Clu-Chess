@@ -72,6 +72,19 @@ describe('application configuration', () => {
         DRAIN_TIMEOUT_MS: '4000',
       }),
     ).toThrow('DRAIN_TIMEOUT_MS');
+    expect(() =>
+      parseEnvironment({
+        DRAIN_SOCKET_GRACE_MS: '4000',
+        DRAIN_TIMEOUT_MS: '4000',
+      }),
+    ).toThrow('DRAIN_SOCKET_GRACE_MS');
+    expect(() =>
+      parseEnvironment({
+        DATABASE_TX_TIMEOUT_MS: '3000',
+        DRAIN_SOCKET_GRACE_MS: '1000',
+        DRAIN_TIMEOUT_MS: '4000',
+      }),
+    ).toThrow('shutdown overhead');
   });
 
   it('requires both active signing-key files', () => {

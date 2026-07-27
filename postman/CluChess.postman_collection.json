@@ -1,0 +1,533 @@
+{
+  "info": {
+    "_postman_id": "2e82fdbf-5bb4-49c9-b879-1c3828df5ee6",
+    "name": "CluChess Backend API",
+    "description": "Runnable collection for every CluChess HTTP endpoint. Start with `docker compose up --build`, select the included local environment, and run the folders in order. Socket.IO is documented in the final folder and in `CluChess.socketio-events.json`; Postman does not export native multi-protocol collections.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 - Operations",
+      "item": [
+        {
+          "name": "Liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/healthz",
+              "host": ["{{baseUrl}}"],
+              "path": ["healthz"]
+            },
+            "description": "Process liveness. This remains 200 while the instance drains."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('liveness is healthy', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json()).to.eql({ status: 'ok' });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/readyz",
+              "host": ["{{baseUrl}}"],
+              "path": ["readyz"]
+            },
+            "description": "Load-balancer readiness. A ready instance reports PostgreSQL and Redis as up."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('instance and dependencies are ready', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.status).to.eql('ok');",
+                  "  pm.expect(body.state).to.eql('ready');",
+                  "  pm.expect(body.deps.db.status).to.eql('up');",
+                  "  pm.expect(body.deps.redis.status).to.eql('up');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Prometheus Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/metrics",
+              "host": ["{{baseUrl}}"],
+              "path": ["metrics"]
+            },
+            "description": "Prometheus text endpoint. It is available on the single-instance development port and intentionally hidden by the multi-instance public Nginx edge."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('metrics are exposed in local development', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('text/plain');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 - Session Bootstrap",
+      "description": "Creates two anonymous guests and stores their JWTs and IDs as collection variables.",
+      "item": [
+        {
+          "name": "Create Guest A",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/session",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "session"]
+            },
+            "description": "Creates guest A. The JWT is stored only in your active Postman scope."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('guest A is created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const body = pm.response.json();",
+                  "pm.test('create response is complete', () => {",
+                  "  pm.expect(body.correlationId).to.be.a('string');",
+                  "  pm.expect(body.token).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.guest.id).to.be.a('string');",
+                  "});",
+                  "pm.collectionVariables.set('tokenA', body.token);",
+                  "pm.collectionVariables.set('guestAId', body.guest.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Guest B",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/session",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "session"]
+            },
+            "description": "Creates guest B for matchmaking and cross-instance tests."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('guest B is created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('tokenB', body.token);",
+                  "pm.collectionVariables.set('guestBId', body.guest.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Current Guest A",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/session",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "session"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('current guest is guest A', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().guest.id).to.eql(pm.collectionVariables.get('guestAId'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Renew Guest A",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/session/renew",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "session", "renew"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('guest A token is renewed', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.token).to.be.a('string').and.not.empty;",
+                  "pm.collectionVariables.set('tokenA', body.token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Recovery",
+      "description": "Run Active Game before matchmaking to see `null`. After completing the Socket.IO queue/ready flow, run it again; it stores the returned game ID for Snapshot.",
+      "item": [
+        {
+          "name": "Get Active Game A",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/games/active",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "games", "active"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('active-game lookup succeeds', () => pm.response.to.have.status(200));",
+                  "const gameId = pm.response.json().gameId;",
+                  "if (gameId) pm.collectionVariables.set('gameId', gameId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Game Snapshot A",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/games/{{gameId}}/snapshot",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "games", "{{gameId}}", "snapshot"]
+            },
+            "description": "Requires `gameId`, populated by Active Game after the Socket.IO matchmaking flow."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('authorized snapshot succeeds', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.gameId).to.eql(pm.collectionVariables.get('gameId'));",
+                  "pm.collectionVariables.set('gameVersion', String(body.gameVersion));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - Session Teardown",
+      "description": "Run these last. Reset revokes the current session and disconnects its sockets.",
+      "item": [
+        {
+          "name": "Reset Guest A",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/session/reset",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "session", "reset"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('guest A is reset', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().ok).to.eql(true);",
+                  "});",
+                  "pm.collectionVariables.unset('tokenA');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reset Guest B",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenB}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/session/reset",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "session", "reset"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('guest B is reset', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.unset('tokenB');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 - Socket.IO v1 Command Templates",
+      "description": "Postman native Socket.IO requests cannot be exported as Collection v2.1. Create a Socket.IO request to `{{socketUrl}}`, add `Origin: {{allowedOrigin}}`, set the Socket.IO Auth object to `{ \"token\": \"{{tokenA}}\" }`, select WebSocket transport, and copy the event name/body pairs from `CluChess.socketio-events.json`. Every command requires Ack. Covered commands: `queue.join`, `queue.leave`, `game.ready`, `game.sync`, `move.submit`, `game.resign`, and `heartbeat.ping`."
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "socketUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "allowedOrigin",
+      "value": "http://localhost:5173",
+      "type": "string"
+    },
+    {
+      "key": "tokenA",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tokenB",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guestAId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guestBId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "gameId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "gameVersion",
+      "value": "0",
+      "type": "string"
+    }
+  ]
+}

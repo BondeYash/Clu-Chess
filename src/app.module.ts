@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { AppConfigModule } from './common/config/app-config.module.js';
 import { LifecycleModule } from './common/lifecycle/lifecycle.module.js';
+import { InFlightWorkMiddleware } from './common/lifecycle/in-flight-work.middleware.js';
 import { CorrelationIdMiddleware } from './common/logging/correlation-id.middleware.js';
 import { LoggingModule } from './common/logging/logging.module.js';
 import { MetricsModule } from './common/metrics/metrics.module.js';
@@ -43,7 +44,7 @@ import { SessionModule } from './modules/session/session.module.js';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer
-      .apply(CorrelationIdMiddleware)
+      .apply(InFlightWorkMiddleware, CorrelationIdMiddleware)
       .forRoutes({ method: RequestMethod.ALL, path: '{*path}' });
   }
 }

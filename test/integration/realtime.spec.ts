@@ -21,6 +21,8 @@ import {
   it,
 } from 'vitest';
 import { AppModule } from '../../src/app.module.js';
+import { ApplicationLifecycleService } from '../../src/common/lifecycle/application-lifecycle.service.js';
+import { MetricsService } from '../../src/common/metrics/metrics.service.js';
 import { RedisService } from '../../src/common/redis/redis.service.js';
 import { BroadcastService } from '../../src/modules/realtime/broadcast.service.js';
 import { configureRealtimeAdapter } from '../../src/modules/realtime/infrastructure/redis-streams-io.adapter.js';
@@ -931,6 +933,117 @@ describe('authenticated realtime gateway', () => {
 
     await realtimeRedis.ensureConnected();
     expect(realtimeRedis.isReady).toBe(true);
+  });
+
+  it('drains one replica without rejecting work on the healthy replica', async () => {
+    const session = await createSession(serverA);
+    const opponentSession = await createSession(appB.getHttpServer() as Server);
+    const allocated = await allocateGame(pool, {
+      guestSessionIds: [session.guest.id, opponentSession.guest.id],
+    });
+    await pool.query(
+      `
+        UPDATE games
+        SET
+          status = 'WAITING_FOR_PLAYERS',
+          join_deadline_at = clock_timestamp() + interval '20 seconds'
+        WHERE id = $1
+      `,
+      [allocated.gameId],
+    );
+    const { socket } = await connectClient(urlA, session.token);
+    const opponent = await connectClient(urlB, opponentSession.token);
+    await emitWithAck(
+      socket,
+      'game.ready',
+      envelope('game.ready', {
+        gameId: allocated.gameId,
+        gameVersion: 0,
+      }),
+    );
+    const started = waitForServerEvent(opponent.socket, 'game.started');
+    await emitWithAck(
+      opponent.socket,
+      'game.ready',
+      envelope('game.ready', {
+        gameId: allocated.gameId,
+        gameVersion: 0,
+      }),
+    );
+    await started;
+    const advisory = waitForServerEvent(socket, 'server.error');
+    const disconnected = new Promise<void>((resolve) => {
+      socket.once('disconnect', () => {
+        resolve();
+      });
+    });
+    const lifecycle = appA.get(ApplicationLifecycleService);
+
+    const draining = lifecycle.beginDrain('test');
+    const queueJoin = await emitWithAck(
+      socket,
+      'queue.join',
+      envelope('queue.join', { payload: { mode: 'blitz' } }),
+    );
+
+    expect(queueJoin).toMatchObject({
+      error: {
+        code: 'SERVICE_UNAVAILABLE',
+        retryAfterMs: 100,
+        retryable: true,
+      },
+      ok: false,
+    });
+    await expect(advisory).resolves.toMatchObject({
+      payload: {
+        code: 'SERVICE_UNAVAILABLE',
+        retryAfterMs: 100,
+        retryable: true,
+      },
+      type: 'server.error',
+    });
+    await request(serverA).get('/readyz').expect(503);
+    await expect(draining).resolves.toBeUndefined();
+    await expect(disconnected).resolves.toBeUndefined();
+
+    const rejected = await connectionFailure(urlA, session.token);
+    expect(rejected).toMatchObject({
+      code: 'SERVICE_UNAVAILABLE',
+      retryable: true,
+    });
+
+    await eventually(async () => {
+      expect(await redis.connection.zcard(`presence:${session.guest.id}`)).toBe(
+        0,
+      );
+    });
+    const recovered = socketClient(urlB, session.token, allowedOrigin);
+    clients.add(recovered);
+    const ready = waitForServerEvent(recovered, 'session.ready');
+    const snapshot = waitForServerEvent(recovered, 'game.snapshot');
+    const connected = new Promise<void>((resolve, reject) => {
+      recovered.once('connect', resolve);
+      recovered.once('connect_error', reject);
+    });
+    recovered.connect();
+    await connected;
+    await expect(ready).resolves.toMatchObject({
+      payload: { activeGameId: allocated.gameId },
+      type: 'session.ready',
+    });
+    await expect(snapshot).resolves.toMatchObject({
+      gameId: allocated.gameId,
+      payload: { status: 'IN_PROGRESS' },
+      type: 'game.snapshot',
+    });
+
+    const renderedMetrics = appA.get(MetricsService).render();
+    expect(renderedMetrics).toContain(
+      'cluchess_ws_connections{instance="realtime-a"} 0',
+    );
+    expect(renderedMetrics).toContain(
+      'cluchess_in_flight_work{instance="realtime-a",kind="realtime"} 0',
+    );
   });
 
   async function connectClient(

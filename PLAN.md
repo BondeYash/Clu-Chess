@@ -917,33 +917,33 @@ Prove that matchmaking, gameplay, presence, timers, broadcasts, reconciliation, 
 
 ### Work
 
-- [ ] Add a local/test topology with at least two app instances, one shared PostgreSQL, one shared Redis, and an Nginx/LB layer.
-- [ ] Configure WSS upgrade headers, origin checks, payload limits, and sticky sessions.
-- [ ] Force WebSocket transport where the client contract allows it; keep documented fallback behavior.
-- [ ] Verify Redis Streams adapter cross-instance room delivery and bounded stream retention.
-- [ ] Verify personal-room delivery when a guest has tabs on different instances.
-- [ ] Verify game-room delivery when opponents are on different instances.
-- [ ] Make presence account for sockets across the fleet, not just the local process.
-- [ ] Verify background-job ownership/leases under instance churn.
-- [ ] Implement graceful drain:
+- [x] Add a local/test topology with at least two app instances, one shared PostgreSQL, one shared Redis, and an Nginx/LB layer.
+- [x] Configure WSS upgrade headers, origin checks, payload limits, and sticky sessions.
+- [x] Force WebSocket transport where the client contract allows it; keep documented fallback behavior.
+- [x] Verify Redis Streams adapter cross-instance room delivery and bounded stream retention.
+- [x] Verify personal-room delivery when a guest has tabs on different instances.
+- [x] Verify game-room delivery when opponents are on different instances.
+- [x] Make presence account for sockets across the fleet, not just the local process.
+- [x] Verify background-job ownership/leases under instance churn.
+- [x] Implement graceful drain:
   - set readiness false;
   - reject new connections and queue joins;
   - finish bounded in-flight transactions;
   - emit reconnect advisory;
   - disconnect remaining sockets after the drain window;
   - close adapter, Redis, and PostgreSQL clients cleanly.
-- [ ] Add metrics for connections and in-flight work by instance.
-- [ ] Document datastore scale path: PostgreSQL primary/read replica boundaries and Redis primary/replica before Cluster.
+- [x] Add metrics for connections and in-flight work by instance.
+- [x] Document datastore scale path: PostgreSQL primary/read replica boundaries and Redis primary/replica before Cluster.
 
 ### Verification
 
-- [ ] Two instances racing `tryMatch` never double-assign.
-- [ ] Two instances racing moves/terminal timers converge through PostgreSQL.
-- [ ] Opponents on different instances receive the same accepted move.
-- [ ] A rolling restart causes only a reconnect/snapshot, not game loss.
-- [ ] Killing the instance that scheduled a timeout/grace does not prevent terminal resolution.
-- [ ] Removing one app replica does not leave queue entries or presence permanently stuck.
-- [ ] Observable protocol behavior is identical in one- and two-instance suites.
+- [x] Two instances racing `tryMatch` never double-assign.
+- [x] Two instances racing moves/terminal timers converge through PostgreSQL.
+- [x] Opponents on different instances receive the same accepted move.
+- [x] A rolling restart causes only a reconnect/snapshot, not game loss.
+- [x] Killing the instance that scheduled a timeout/grace does not prevent terminal resolution.
+- [x] Removing one app replica does not leave queue entries or presence permanently stuck.
+- [x] Observable protocol behavior is identical in one- and two-instance suites.
 
 ### Exit criteria
 

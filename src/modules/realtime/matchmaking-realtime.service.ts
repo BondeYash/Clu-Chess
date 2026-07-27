@@ -5,6 +5,7 @@ import {
   type OnApplicationShutdown,
 } from '@nestjs/common';
 import { AppConfigService } from '../../common/config/app-config.service.js';
+import { ApplicationLifecycleService } from '../../common/lifecycle/application-lifecycle.service.js';
 import { MetricsService } from '../../common/metrics/metrics.service.js';
 import type {
   GameAllocation,
@@ -52,6 +53,7 @@ export class MatchmakingRealtimeService
     OnApplicationShutdown
 {
   private readonly intervals: Readonly<Record<JobName, number>>;
+  private readonly drainRetryAfterMs: number;
   private readonly logger = new Logger(MatchmakingRealtimeService.name);
   private readonly runningJobs = new Set<JobName>();
   private readonly timers: NodeJS.Timeout[] = [];
@@ -64,12 +66,14 @@ export class MatchmakingRealtimeService
     private readonly gameLifecycle: GameLifecycleService,
     private readonly gameRecovery: GameRecoveryService,
     private readonly games: GameRoomService,
+    private readonly lifecycle: ApplicationLifecycleService,
     private readonly matchmaking: MatchmakingService,
     private readonly metrics: MetricsService,
     private readonly moves: GameMoveService,
     private readonly protocol: RealtimeProtocolService,
     private readonly snapshots: GameSnapshotPresenter,
   ) {
+    this.drainRetryAfterMs = config.values.DRAIN_SOCKET_GRACE_MS;
     this.intervals = {
       drain: config.values.JOB_MATCH_DRAIN_MS,
       reconcile: config.values.JOB_RESERVATION_RECONCILE_MS,
@@ -155,6 +159,14 @@ export class MatchmakingRealtimeService
     context: RealtimeCommandContext,
     mode: 'blitz',
   ): Promise<RealtimeCommandResult> {
+    if (!this.lifecycle.isReady) {
+      throw new RealtimeError(
+        'SERVICE_UNAVAILABLE',
+        'This server is draining; reconnect before joining the queue.',
+        true,
+        { retryAfterMs: this.drainRetryAfterMs },
+      );
+    }
     const result = await this.matchmaking.join(
       context.identity.guestSessionId,
       mode,

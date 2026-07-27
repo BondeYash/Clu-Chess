@@ -32,11 +32,20 @@ function controller(
   );
 }
 
+function lifecycle(): ApplicationLifecycleService {
+  return new ApplicationLifecycleService(
+    {
+      values: { INSTANCE_ID: 'health-test' },
+    } as unknown as AppConfigService,
+    { setGauge: vi.fn() } as unknown as MetricsService,
+  );
+}
+
 describe('HealthController', () => {
   it('keeps liveness independent of lifecycle and dependencies', () => {
-    const lifecycle = new ApplicationLifecycleService();
+    const applicationLifecycle = lifecycle();
     const health = controller(
-      lifecycle,
+      applicationLifecycle,
       {} as PostgresHealthService,
       {} as RedisService,
     );
@@ -45,15 +54,15 @@ describe('HealthController', () => {
   });
 
   it('is ready only when lifecycle and dependencies are healthy', async () => {
-    const lifecycle = new ApplicationLifecycleService();
-    lifecycle.onApplicationBootstrap();
+    const applicationLifecycle = lifecycle();
+    applicationLifecycle.onApplicationBootstrap();
     const postgres = {
       check: vi.fn().mockResolvedValue({ latencyMs: 1, status: 'up' }),
     } as unknown as PostgresHealthService;
     const redis = {
       check: vi.fn().mockResolvedValue({ latencyMs: 1, status: 'up' }),
     } as unknown as RedisService;
-    const health = controller(lifecycle, postgres, redis);
+    const health = controller(applicationLifecycle, postgres, redis);
     const { response, status } = responseStub();
 
     await expect(health.readiness(response)).resolves.toMatchObject({
@@ -63,16 +72,16 @@ describe('HealthController', () => {
   });
 
   it('fails readiness while a dependency is down or the app drains', async () => {
-    const lifecycle = new ApplicationLifecycleService();
-    lifecycle.onApplicationBootstrap();
-    await lifecycle.beginDrain('test');
+    const applicationLifecycle = lifecycle();
+    applicationLifecycle.onApplicationBootstrap();
+    await applicationLifecycle.beginDrain('test');
     const postgres = {
       check: vi.fn().mockResolvedValue({ latencyMs: 1, status: 'up' }),
     } as unknown as PostgresHealthService;
     const redis = {
       check: vi.fn().mockResolvedValue({ latencyMs: 1, status: 'down' }),
     } as unknown as RedisService;
-    const health = controller(lifecycle, postgres, redis);
+    const health = controller(applicationLifecycle, postgres, redis);
     const { response, status } = responseStub();
 
     await expect(health.readiness(response)).resolves.toMatchObject({

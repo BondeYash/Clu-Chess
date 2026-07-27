@@ -73,6 +73,7 @@ const environmentSchema = z
       .max(8192)
       .default(8192),
     DRAIN_TIMEOUT_MS: duration(15_000),
+    DRAIN_SOCKET_GRACE_MS: duration(500),
     SOCKET_PING_INTERVAL_MS: duration(25_000),
     SOCKET_PING_TIMEOUT_MS: duration(20_000),
     SOCKET_RECOVERY_MAX_DISCONNECTION_MS: duration(120_000),
@@ -163,6 +164,28 @@ const environmentSchema = z
       context.addIssue({
         code: 'custom',
         message: 'must exceed DATABASE_TX_TIMEOUT_MS',
+        path: ['DRAIN_TIMEOUT_MS'],
+      });
+    }
+
+    if (environment.DRAIN_SOCKET_GRACE_MS >= environment.DRAIN_TIMEOUT_MS) {
+      context.addIssue({
+        code: 'custom',
+        message: 'must be less than DRAIN_TIMEOUT_MS',
+        path: ['DRAIN_SOCKET_GRACE_MS'],
+      });
+    }
+
+    if (
+      environment.DRAIN_TIMEOUT_MS <=
+      environment.DATABASE_TX_TIMEOUT_MS +
+        environment.DRAIN_SOCKET_GRACE_MS +
+        100
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'must exceed DATABASE_TX_TIMEOUT_MS plus DRAIN_SOCKET_GRACE_MS and shutdown overhead',
         path: ['DRAIN_TIMEOUT_MS'],
       });
     }

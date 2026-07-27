@@ -7,7 +7,10 @@ import {
 } from '@nestjs/websockets';
 import type { ExtendedError } from 'socket.io';
 import { randomUUID } from 'node:crypto';
+import { AppConfigService } from '../../common/config/app-config.service.js';
+import { ApplicationLifecycleService } from '../../common/lifecycle/application-lifecycle.service.js';
 import { CorrelationContextService } from '../../common/logging/correlation-context.service.js';
+import { MetricsService } from '../../common/metrics/metrics.service.js';
 import { PresenceService } from '../presence/presence.service.js';
 import { GuestSocketDisconnectRegistry } from '../session/infrastructure/guest-socket-disconnect-registry.js';
 import { ActiveGameLookupService } from './active-game-lookup.service.js';
@@ -44,6 +47,7 @@ interface SocketHandshakeError extends ExtendedError {
   data?: {
     code: string;
     correlationId: string;
+    retryAfterMs?: number;
     retryable: boolean;
   };
 }
@@ -56,17 +60,26 @@ export class RealtimeGateway
     OnGatewayDisconnect<RealtimeSocket>,
     OnApplicationShutdown
 {
+  private readonly drainGraceMs: number;
+  private readonly drainTimeoutMs: number;
+  private readonly transactionTimeoutMs: number;
+  private readonly instanceId: string;
   private readonly logger = new Logger(RealtimeGateway.name);
   private server: RealtimeServer | undefined;
+  private readonly trackedSockets = new Set<string>();
+  private unregisterDrainHook: (() => void) | undefined;
 
   constructor(
     private readonly activeGames: ActiveGameLookupService,
     private readonly authentication: RealtimeAuthenticationService,
     private readonly broadcast: BroadcastService,
+    config: AppConfigService,
     private readonly connections: ConnectionRegistryService,
     private readonly correlation: CorrelationContextService,
     private readonly disconnectRegistry: GuestSocketDisconnectRegistry,
     private readonly errors: RealtimeErrorMapperService,
+    private readonly lifecycle: ApplicationLifecycleService,
+    private readonly metrics: MetricsService,
     private readonly presence: PresenceService,
     private readonly protocol: RealtimeProtocolService,
     private readonly rateLimits: RealtimeRateLimitService,
@@ -74,16 +87,29 @@ export class RealtimeGateway
     private readonly commands: RealtimeCommandHandler,
     @Inject(GUEST_PRESENCE_OBSERVER)
     private readonly presenceObserver: GuestPresenceObserver,
-  ) {}
+  ) {
+    this.drainGraceMs = config.values.DRAIN_SOCKET_GRACE_MS;
+    this.drainTimeoutMs = config.values.DRAIN_TIMEOUT_MS;
+    this.transactionTimeoutMs = config.values.DATABASE_TX_TIMEOUT_MS;
+    this.instanceId = config.values.INSTANCE_ID;
+    this.publishConnectionMetric();
+  }
 
   afterInit(server: RealtimeServer): void {
     this.server = server;
+    this.unregisterDrainHook = this.lifecycle.registerDrainHook(() =>
+      this.drainConnections(),
+    );
     this.broadcast.bind(server);
     this.disconnectRegistry.bind(this.broadcast);
     server.use((socket, next) => {
       const correlationId = this.protocol.correlationId(
         socket.handshake.headers['x-correlation-id'],
       );
+      if (!this.lifecycle.isReady) {
+        next(this.drainingHandshakeError(correlationId));
+        return;
+      }
       void this.authentication
         .authenticate(socket, correlationId)
         .then(() => {
@@ -105,21 +131,36 @@ export class RealtimeGateway
   }
 
   handleConnection(socket: RealtimeSocket): void {
+    this.trackedSockets.add(socket.id);
+    this.publishConnectionMetric();
+    if (!this.lifecycle.isReady) {
+      this.emitDrainAdvisory(socket);
+      socket.disconnect(true);
+      return;
+    }
     socket.onAny((eventName: string, ...arguments_: unknown[]) => {
       void this.handleIncoming(socket, eventName, arguments_);
     });
-    void this.initializeSocket(socket);
+    const finishWork = this.lifecycle.trackWork('realtime');
+    void this.initializeSocket(socket).finally(finishWork);
   }
 
   handleDisconnect(socket: RealtimeSocket): void {
-    void this.cleanUpSocket(socket);
+    this.trackedSockets.delete(socket.id);
+    this.publishConnectionMetric();
+    const finishWork = this.lifecycle.trackWork('realtime');
+    void this.cleanUpSocket(socket).finally(finishWork);
   }
 
   onApplicationShutdown(): void {
+    this.unregisterDrainHook?.();
+    this.unregisterDrainHook = undefined;
     if (this.server !== undefined) {
       this.broadcast.unbind(this.server);
       this.server = undefined;
     }
+    this.trackedSockets.clear();
+    this.publishConnectionMetric();
     this.disconnectRegistry.unbind(this.broadcast);
   }
 
@@ -158,6 +199,7 @@ export class RealtimeGateway
     eventName: string,
     arguments_: readonly unknown[],
   ): Promise<void> {
+    const finishWork = this.lifecycle.trackWork('realtime');
     const rawEnvelope = arguments_[0];
     const acknowledgment =
       typeof arguments_[1] === 'function' && arguments_.length === 2
@@ -168,45 +210,49 @@ export class RealtimeGateway
     );
     const requestEventId = this.protocol.requestEventId(rawEnvelope);
 
-    await this.correlation.run(correlationId, async () => {
-      try {
-        if (acknowledgment === undefined) {
-          throw new RealtimeError(
-            'INVALID_PAYLOAD',
-            'Socket command acknowledgment is required',
-            false,
-          );
-        }
-        const event = this.protocol.parseClientEvent(eventName, rawEnvelope);
-        const identity = this.identity(socket);
-        await this.rateLimits.consume(event.type, identity.guestSessionId);
-        const result = await this.executeEvent(socket, identity, event);
-        acknowledgment(
-          this.protocol.createSuccessAck(
-            event.eventId,
-            correlationId,
-            result.type,
-            result.payload,
-            result.gameVersion,
-          ),
-        );
-      } catch (error) {
-        const mapped = this.errors.map(error);
-        if (acknowledgment !== undefined) {
+    try {
+      await this.correlation.run(correlationId, async () => {
+        try {
+          if (acknowledgment === undefined) {
+            throw new RealtimeError(
+              'INVALID_PAYLOAD',
+              'Socket command acknowledgment is required',
+              false,
+            );
+          }
+          const event = this.protocol.parseClientEvent(eventName, rawEnvelope);
+          const identity = this.identity(socket);
+          await this.rateLimits.consume(event.type, identity.guestSessionId);
+          const result = await this.executeEvent(socket, identity, event);
           acknowledgment(
-            this.protocol.createFailureAck(
-              requestEventId,
+            this.protocol.createSuccessAck(
+              event.eventId,
               correlationId,
-              mapped.error,
-              mapped.responseType,
-              mapped.gameVersion,
+              result.type,
+              result.payload,
+              result.gameVersion,
             ),
           );
-          return;
+        } catch (error) {
+          const mapped = this.errors.map(error);
+          if (acknowledgment !== undefined) {
+            acknowledgment(
+              this.protocol.createFailureAck(
+                requestEventId,
+                correlationId,
+                mapped.error,
+                mapped.responseType,
+                mapped.gameVersion,
+              ),
+            );
+            return;
+          }
+          this.emitServerError(socket, error, correlationId);
         }
-        this.emitServerError(socket, error, correlationId);
-      }
-    });
+      });
+    } finally {
+      finishWork();
+    }
   }
 
   private async executeEvent(
@@ -360,6 +406,69 @@ export class RealtimeGateway
     socket.emit(event.type, event);
   }
 
+  private async drainConnections(): Promise<void> {
+    const server = this.server;
+    if (server === undefined) {
+      return;
+    }
+
+    const event = this.createDrainAdvisory();
+    server.local.emit(event.type, event);
+    const cleanupWindowMs = this.transactionTimeoutMs + 100;
+    const workWindowMs = Math.max(
+      0,
+      this.drainTimeoutMs - this.drainGraceMs - cleanupWindowMs - 100,
+    );
+    const [idle] = await Promise.all([
+      this.lifecycle.waitForIdle(workWindowMs),
+      this.wait(this.drainGraceMs),
+    ]);
+    if (!idle) {
+      this.logger.warn(
+        { inFlightWork: this.lifecycle.inFlightWork },
+        'Drain window elapsed with work still in flight',
+      );
+    }
+    server.local.disconnectSockets(true);
+    const cleanupIdle = await this.lifecycle.waitForIdle(cleanupWindowMs);
+    if (!cleanupIdle) {
+      this.logger.warn(
+        { inFlightWork: this.lifecycle.inFlightWork },
+        'Socket cleanup exceeded its transaction drain window',
+      );
+    }
+  }
+
+  private createDrainAdvisory(): ServerEventEnvelope {
+    return this.protocol.createServerEvent({
+      payload: {
+        code: 'SERVICE_UNAVAILABLE',
+        message: 'This server is restarting; reconnect to another instance.',
+        retryAfterMs: this.drainGraceMs,
+        retryable: true,
+      },
+      type: 'server.error',
+    });
+  }
+
+  private emitDrainAdvisory(socket: RealtimeSocket): void {
+    const event = this.createDrainAdvisory();
+    socket.emit(event.type, event);
+  }
+
+  private drainingHandshakeError(correlationId: string): SocketHandshakeError {
+    const error = new Error(
+      'This server is draining; reconnect to another instance.',
+    ) as SocketHandshakeError;
+    error.data = {
+      code: 'SERVICE_UNAVAILABLE',
+      correlationId,
+      retryAfterMs: this.drainGraceMs,
+      retryable: true,
+    };
+    return error;
+  }
+
   private async cleanUpSocket(socket: RealtimeSocket): Promise<void> {
     const identity = socket.data.identity;
     const addressHash = socket.data.addressHash;
@@ -422,5 +531,20 @@ export class RealtimeGateway
       throw new Error('Socket presence member is unavailable');
     }
     return socket.data.socketMember;
+  }
+
+  private publishConnectionMetric(): void {
+    this.metrics.setGauge(
+      'cluchess_ws_connections',
+      'Active WebSocket connections by application instance.',
+      this.trackedSockets.size,
+      { instance: this.instanceId },
+    );
+  }
+
+  private async wait(delayMs: number): Promise<void> {
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, delayMs);
+    });
   }
 }

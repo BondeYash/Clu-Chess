@@ -1,6 +1,6 @@
 # CluChess Configuration Contract
 
-> **Status:** Implemented through Phase 7
+> **Status:** Implemented through Phase 10
 > **Goal:** No manual local environment or external-service setup
 
 ## 1. Zero-touch local workflow
@@ -80,6 +80,7 @@ All duration values use explicit millisecond or second suffixes. Startup validat
 | `SNAPSHOT_CACHE_TTL_MS`                | `60000`                    | shorter integration value | default `60000`             |
 | `MAX_WS_BUFFER_BYTES`                  | `8192`                     | `8192`                    | maximum `8192` for v1       |
 | `DRAIN_TIMEOUT_MS`                     | `15000`                    | `1000`                    | default `15000`             |
+| `DRAIN_SOCKET_GRACE_MS`                | `500`                      | scenario supplied         | default `500`               |
 | `SOCKET_PING_INTERVAL_MS`              | `25000`                    | scenario supplied         | default `25000`             |
 | `SOCKET_PING_TIMEOUT_MS`               | `20000`                    | scenario supplied         | default `20000`             |
 | `SOCKET_RECOVERY_MAX_DISCONNECTION_MS` | `120000`                   | `5000`                    | bounded, default `120000`   |
@@ -154,7 +155,9 @@ Required relationships:
 - `QUEUE_GUARD_TTL_MS` is greater than `PRESENCE_TTL_MS`;
 - `MATCH_STATE_TTL_MS` is greater than `RESERVATION_TTL_MS`;
 - retiring JWT verification keys remain mounted for `JWT_TTL_SECONDS + JWT_CLOCK_SKEW_SECONDS`;
-- `DRAIN_TIMEOUT_MS` exceeds the database transaction timeout;
+- `DRAIN_TIMEOUT_MS` exceeds the database transaction timeout, socket grace,
+  and bounded shutdown overhead combined;
+- `DRAIN_SOCKET_GRACE_MS` is less than `DRAIN_TIMEOUT_MS`;
 - all clocks, grace, and deadline values are positive; increments may be zero.
 
 ## 7. Docker persistence and cleanup

@@ -1,0 +1,181 @@
+name: cluchess-multi
+
+x-app-environment: &app-environment
+  DATABASE_URL: postgresql://cluchess_runtime:cluchess_runtime_dev@postgres:5432/cluchess?schema=public
+  DRAIN_SOCKET_GRACE_MS: '500'
+  DRAIN_TIMEOUT_MS: '15000'
+  JWT_KID: local-dev-1
+  JWT_PRIVATE_KEY_FILE: /run/secrets/cluchess/jwt-private.pem
+  JWT_PUBLIC_KEYS_DIR: /run/secrets/cluchess/public
+  LOG_LEVEL: info
+  NODE_ENV: production
+  ORIGIN_ALLOWLIST: https://localhost:${MULTI_EDGE_PORT:-3443}
+  OTEL_ENABLED: 'false'
+  PORT: '3000'
+  REDIS_URL: redis://redis:6379
+  TZ: UTC
+
+x-app: &app
+  image: cluchess-multi-application:local
+  pull_policy: never
+  depends_on:
+    app-image:
+      condition: service_completed_successfully
+    keygen:
+      condition: service_completed_successfully
+    migrate:
+      condition: service_completed_successfully
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  healthcheck:
+    test:
+      [
+        'CMD',
+        'node',
+        '-e',
+        "fetch('http://127.0.0.1:3000/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+      ]
+    interval: 3s
+    timeout: 3s
+    retries: 30
+    start_period: 10s
+  restart: unless-stopped
+  volumes:
+    - jwt-keys:/run/secrets/cluchess:ro
+
+services:
+  app-image:
+    image: cluchess-multi-application:local
+    build:
+      context: .
+      target: production
+    command: ['node', '--version']
+
+  postgres:
+    image: postgres:16.9-alpine
+    environment:
+      POSTGRES_DB: cluchess
+      POSTGRES_PASSWORD: cluchess_owner_dev
+      POSTGRES_USER: cluchess_owner
+      TZ: UTC
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U cluchess_owner -d cluchess']
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7.4.5-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - redis-data:/data
+
+  keygen:
+    image: cluchess-multi-development:local
+    build:
+      context: .
+      target: development
+    command: ['node', 'scripts/generate-local-keys.mjs']
+    environment:
+      JWT_KID: local-dev-1
+      KEY_OUTPUT_DIR: /run/secrets/cluchess
+      KEY_OWNER_GID: '1000'
+      KEY_OWNER_UID: '1000'
+    user: '0:0'
+    volumes:
+      - jwt-keys:/run/secrets/cluchess
+
+  edge-keygen:
+    image: cluchess-multi-development:local
+    pull_policy: never
+    command: ['node', 'scripts/generate-local-edge-certificate.mjs']
+    depends_on:
+      keygen:
+        condition: service_completed_successfully
+    environment:
+      EDGE_TLS_OUTPUT_DIR: /run/secrets/cluchess-edge
+    user: '0:0'
+    volumes:
+      - edge-tls:/run/secrets/cluchess-edge
+
+  migrate:
+    image: cluchess-multi-development:local
+    pull_policy: never
+    command: ['npm', 'run', 'prisma:deploy']
+    depends_on:
+      keygen:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      MIGRATION_DATABASE_URL: postgresql://cluchess_migrator:cluchess_migrator_dev@postgres:5432/cluchess?schema=public
+
+  app-a:
+    <<: *app
+    environment:
+      <<: *app-environment
+      INSTANCE_ID: multi-a
+
+  app-b:
+    <<: *app
+    environment:
+      <<: *app-environment
+      INSTANCE_ID: multi-b
+
+  nginx:
+    image: nginx:1.30.4-alpine
+    depends_on:
+      app-a:
+        condition: service_healthy
+      app-b:
+        condition: service_healthy
+      edge-keygen:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-check-certificate',
+          '--quiet',
+          '--spider',
+          'https://127.0.0.1/readyz',
+        ]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    ports:
+      - '${MULTI_EDGE_PORT:-3443}:443'
+    restart: unless-stopped
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - edge-tls:/run/secrets/cluchess-edge:ro
+
+  smoke:
+    profiles: ['test']
+    image: cluchess-multi-development:local
+    pull_policy: never
+    command: ['node', 'scripts/multi-instance-smoke.mjs']
+    depends_on:
+      nginx:
+        condition: service_healthy
+    environment:
+      MULTI_BASE_URL: https://nginx
+      MULTI_ORIGIN: https://localhost:${MULTI_EDGE_PORT:-3443}
+      NODE_TLS_REJECT_UNAUTHORIZED: '0'
+
+volumes:
+  edge-tls:
+  jwt-keys:
+  postgres-data:
+  redis-data:

@@ -25,6 +25,7 @@
     "test:coverage": "vitest run --coverage --config vitest.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:integration:docker": "sh scripts/run-integration-tests.sh",
+    "test:multi:docker": "sh scripts/run-multi-instance-tests.sh",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "prisma:deploy": "prisma migrate deploy",

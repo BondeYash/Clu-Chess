@@ -24,6 +24,16 @@ PostgreSQL 16 and Redis 7, deploys Prisma migrations, and serves:
 No `.env` file, host Node.js installation, database, cache, or signing-key
 setup is required.
 
+Start the production-shaped two-replica/WSS topology:
+
+```bash
+docker compose -f compose.multi.yaml up --build
+```
+
+It serves the self-signed local HTTPS edge at
+<https://localhost:3443>. PostgreSQL, Redis, migrations, JWT keys, and the TLS
+certificate are all Docker-managed.
+
 ## Verify
 
 Run the code-quality and unit-test gate in the development container:
@@ -37,6 +47,13 @@ Redis containers:
 
 ```bash
 sh scripts/run-integration-tests.sh
+```
+
+Run the isolated two-replica Nginx/WSS smoke, which exercises every HTTP route
+and the complete realtime game flow:
+
+```bash
+npm run test:multi:docker
 ```
 
 Stop the stack while retaining local data:
@@ -73,3 +90,7 @@ terminal cleanup are documented in
 Refresh/reconnect recovery, leaderless drift repair, metrics, and Docker
 dependency drills are documented in
 [docs/recovery-operations.md](docs/recovery-operations.md).
+Multi-replica routing, graceful drain, rolling restarts, and datastore scaling
+are documented in
+[docs/scaling-operations.md](docs/scaling-operations.md).
+Importable HTTP and Socket.IO Postman assets are in [postman](postman/README.md).

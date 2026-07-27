@@ -6,6 +6,7 @@ process.env.REDIS_URL = inject('redisUrl');
 process.env.DATABASE_POOL_MAX = '5';
 process.env.DATABASE_TX_TIMEOUT_MS = '3000';
 process.env.DRAIN_TIMEOUT_MS = '4000';
+process.env.DRAIN_SOCKET_GRACE_MS = '100';
 process.env.JOB_MATCH_DRAIN_MS = '60000';
 process.env.JOB_QUEUE_SWEEP_MS = '60000';
 process.env.JOB_RESERVATION_RECONCILE_MS = '60000';
