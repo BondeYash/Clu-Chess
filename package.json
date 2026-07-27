@@ -82,6 +82,7 @@
     "vitest": "4.1.10"
   },
   "overrides": {
+    "brace-expansion": "5.0.8",
     "find-my-way": "9.7.0"
   },
   "allowScripts": {

@@ -484,8 +484,23 @@ function waitForServerEvent(
 }
 
 function forge(token: string): string {
-  const replacement = token.endsWith('a') ? 'b' : 'a';
-  return `${token.slice(0, -1)}${replacement}`;
+  const [encodedHeader, encodedClaims, encodedSignature, extraSegment] =
+    token.split('.');
+  if (
+    encodedHeader === undefined ||
+    encodedClaims === undefined ||
+    encodedSignature === undefined ||
+    extraSegment !== undefined
+  ) {
+    throw new Error('Cannot forge malformed token');
+  }
+  const signature = Buffer.from(encodedSignature, 'base64url');
+  const firstByte = signature[0];
+  if (firstByte === undefined) {
+    throw new Error('Cannot forge empty token signature');
+  }
+  signature[0] = firstByte ^ 1;
+  return `${encodedHeader}.${encodedClaims}.${signature.toString('base64url')}`;
 }
 
 function expiredToken(token: string): string {

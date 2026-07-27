@@ -1,9 +1,7 @@
 import { RequestMethod, type INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Server } from 'node:http';
-import { promisify } from 'node:util';
 import type { Pool } from 'pg';
 import type { Response as SuperAgentResponse } from 'superagent';
 import request from 'supertest';
@@ -35,8 +33,8 @@ import {
   createPool,
   truncateApplicationTables,
 } from './support/database.js';
+import { signalContainer } from './support/docker-engine.js';
 
-const executeFile = promisify(execFile);
 const UUID_V4 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const errorResponseSchema = z.object({
@@ -292,7 +290,7 @@ describe('anonymous session REST lifecycle', () => {
       responseBody(await createSession(randomUUID(), randomUUID(), 201)),
     );
     const containerId = inject('redisContainerId');
-    await executeFile('docker', ['pause', containerId]);
+    await signalContainer(containerId, 'pause');
     try {
       const renewUnavailable = await request(server)
         .post('/v1/session/renew')
@@ -312,7 +310,7 @@ describe('anonymous session REST lifecycle', () => {
         error: { code: 'SERVICE_UNAVAILABLE', retryable: true },
       });
     } finally {
-      await executeFile('docker', ['unpause', containerId]);
+      await signalContainer(containerId, 'unpause');
       await eventually(async () => {
         await redis.connection.ping();
       });
@@ -321,14 +319,14 @@ describe('anonymous session REST lifecycle', () => {
 
   it('returns 503 and recovers after PostgreSQL becomes unavailable', async () => {
     const containerId = inject('postgresContainerId');
-    await executeFile('docker', ['pause', containerId]);
+    await signalContainer(containerId, 'pause');
     try {
       const unavailable = await createSession(randomUUID(), randomUUID(), 503);
       expect(responseBody(unavailable)).toMatchObject({
         error: { code: 'SERVICE_UNAVAILABLE', retryable: true },
       });
     } finally {
-      await executeFile('docker', ['unpause', containerId]);
+      await signalContainer(containerId, 'unpause');
       await eventually(async () => {
         await pool.query('SELECT 1');
       });
