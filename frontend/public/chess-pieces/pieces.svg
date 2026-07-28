@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <symbol id="king" viewBox="0 0 64 64">
+    <path fill="currentColor" d="M29 4h6v8h7v6h-7v7h-6v-7h-7v-6h7V4Zm-8 23h22l-3 11H24l-3-11Zm3 14h16l5 11H19l5-11Zm-7 14h30v5H17v-5Z"/>
+  </symbol>
+  <symbol id="queen" viewBox="0 0 64 64">
+    <circle cx="15" cy="16" r="4" fill="currentColor"/>
+    <circle cx="32" cy="10" r="4" fill="currentColor"/>
+    <circle cx="49" cy="16" r="4" fill="currentColor"/>
+    <path fill="currentColor" d="m14 22 10 8 8-14 8 14 10-8-5 19H19l-5-19Zm7 22h22l4 11H17l4-11Zm-5 14h32v4H16v-4Z"/>
+  </symbol>
+  <symbol id="rook" viewBox="0 0 64 64">
+    <path fill="currentColor" d="M15 9h9v8h6V9h8v8h6V9h8v16l-6 6 3 23H15l3-23-6-6V9h3Zm9 24-2 15h20l-2-15H24ZM12 57h40v5H12v-5Z"/>
+  </symbol>
+  <symbol id="bishop" viewBox="0 0 64 64">
+    <path fill="currentColor" d="M32 5c7 7 11 13 11 19 0 7-4 12-9 15l5 6H25l5-6c-5-3-9-8-9-15 0-6 4-12 11-19Zm1 9-5 12 4 3 6-12-5-3ZM22 48h20l5 8H17l5-8Zm-7 11h34v4H15v-4Z"/>
+  </symbol>
+  <symbol id="knight" viewBox="0 0 64 64">
+    <path fill="currentColor" d="M18 52c0-10 5-18 14-25l-8-8 4-14c13 3 23 12 27 27l-11 5c-3-5-8-7-13-4 7 4 11 10 11 19H18Zm17-35a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM14 56h34v6H14v-6Z"/>
+  </symbol>
+  <symbol id="pawn" viewBox="0 0 64 64">
+    <circle cx="32" cy="17" r="10" fill="currentColor"/>
+    <path fill="currentColor" d="M24 29h16c-1 9 2 16 7 23H17c5-7 8-14 7-23Zm-9 27h34v6H15v-6Z"/>
+  </symbol>
+</svg>

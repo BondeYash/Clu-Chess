@@ -8,7 +8,7 @@ describe('layout foundations', () => {
   it('exposes a labelled primary navigation', () => {
     render(<PublicHeader />);
 
-    expect(screen.getByRole('link', { name: 'Cluchess home' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'CluChess home' })).toHaveAttribute(
       'href',
       '/',
     );

@@ -2,13 +2,16 @@
 
 > **Phase 0 status:** Complete — accepted 2026-07-28
 > **Phase 1 status:** Complete — accepted 2026-07-28
+> **Phase 2 status:** Complete — accepted 2026-07-28
 > **Master plan:** [`../../FRONTEND_PLAN.md`](../../FRONTEND_PLAN.md)
 > **Backend contract:** [`../protocol-v1.md`](../protocol-v1.md)
 
 This directory contains the implementation authority for the CluChess web
 frontend. Phase 0 closed product scope and frontend decisions. Phase 1 added the
 independently verified Next.js runtime and extracted the shared protocol
-artifact without changing the backend's public wire contract.
+artifact without changing the backend's public wire contract. Phase 2
+implemented the responsive visual system, accessible component catalog, and
+high-fidelity fixture routes.
 
 ## Phase 0 artifacts
 
@@ -24,7 +27,8 @@ artifact without changing the backend's public wire contract.
 | [`asset-register.md`](asset-register.md)                       | Avatar, chess-piece, lesson-art, icon, font, and sound inventory   |
 | [`prototypes/`](prototypes/)                                   | Dependency-free keyboard board interaction prototype               |
 | [`phase-0-acceptance.md`](phase-0-acceptance.md)               | Evidence and acceptance checklist                                  |
-| [`phase-1-acceptance.md`](phase-1-acceptance.md)               | Runtime, contract, container, Compose, and regression evidence      |
+| [`phase-1-acceptance.md`](phase-1-acceptance.md)               | Runtime, contract, container, Compose, and regression evidence     |
+| [`phase-2-acceptance.md`](phase-2-acceptance.md)               | Design-system, responsive, accessibility, and visual-test evidence |
 | [`validate-phase-0.mjs`](validate-phase-0.mjs)                 | Repeatable artifact, contract, link, contrast, and prototype check |
 | [`adr/`](adr/)                                                 | Accepted frontend architecture decision records                    |
 

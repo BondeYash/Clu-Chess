@@ -8,6 +8,7 @@ parseFrontendEnvironment(process.env);
 const nextConfig: NextConfig = {
   allowedDevOrigins: ['127.0.0.1'],
   compress: true,
+  devIndicators: false,
   output: 'standalone',
   outputFileTracingRoot: import.meta.dirname,
   poweredByHeader: false,

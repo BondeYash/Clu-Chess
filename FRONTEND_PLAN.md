@@ -1,6 +1,6 @@
 # CluChess Frontend Architecture and Implementation Plan
 
-> **Status:** Phase 1 complete; Phase 2 ready to implement
+> **Status:** Phase 2 complete; Phase 3 ready to implement
 > **Backend authority:** [`Architecture.md`](Architecture.md), [`docs/protocol-v1.md`](docs/protocol-v1.md), and the implemented controllers/gateway
 > **Frontend scope:** Next.js App Router web client for anonymous identity, instant matchmaking, authoritative realtime chess, recovery, learning content, settings, and production operations
 > **Delivery model:** A separately deployable `frontend/` application in this repository, integrated with the existing NestJS backend through REST and Socket.IO protocol v1
@@ -475,14 +475,14 @@ V1 has one authenticated principal type: `guest`. Define capabilities rather tha
 
 ```ts
 type Capability =
-  | 'session:view'
-  | 'session:reset'
-  | 'queue:join'
-  | 'queue:leave'
-  | 'game:view'
-  | 'game:move'
-  | 'game:resign'
-  | 'learn:view';
+  | "session:view"
+  | "session:reset"
+  | "queue:join"
+  | "queue:leave"
+  | "game:view"
+  | "game:move"
+  | "game:resign"
+  | "learn:view";
 ```
 
 `can(capability, context)` considers session state, socket state, active assignment, game membership/status, turn, and pending command state to enable or explain UI actions. It never replaces backend authorization.
@@ -951,7 +951,7 @@ interface PendingMove {
   to: Square;
   promotion?: Promotion;
   attempts: number;
-  state: 'sending' | 'uncertain';
+  state: "sending" | "uncertain";
 }
 ```
 
@@ -1409,6 +1409,9 @@ Create a bootable, typed, reproducible frontend foundation without disturbing ba
 - Production container runs as non-root and passes smoke.
 
 ### Phase 2 — Design system and responsive shell
+
+> **Status:** Complete — accepted 2026-07-28
+> **Evidence:** [`docs/frontend/phase-2-acceptance.md`](docs/frontend/phase-2-acceptance.md)
 
 **Objective**
 

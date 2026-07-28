@@ -1,0 +1,83 @@
+:root {
+  --color-canvas: #f3f0e8;
+  --color-canvas-strong: #e7e0d2;
+  --color-surface: #ffffff;
+  --color-surface-inverse: #262b27;
+  --color-ink: #1c211e;
+  --color-ink-muted: #5c625c;
+  --color-ink-inverse: #f7f3ea;
+  --color-line: #d4ccbd;
+  --color-accent: #a65335;
+  --color-accent-strong: #7b3d28;
+  --color-sage: #6d7763;
+  --color-brass: #d7b46a;
+  --color-danger: #9a3f32;
+  --color-success: #4f6b50;
+  --color-focus-ring: #a65335;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+  --space-9: 5rem;
+  --space-10: 6rem;
+  --space-12: 8rem;
+
+  --display-xl: 4.5rem;
+  --display-lg: 3.5rem;
+  --heading-xl: 2.5rem;
+  --heading-lg: 1.875rem;
+  --heading-md: 1.375rem;
+  --type-body-lg: 1.125rem;
+  --type-body: 1rem;
+  --type-body-sm: 0.875rem;
+  --type-label: 0.8125rem;
+
+  --content-reading: 68ch;
+  --content-form: 40rem;
+  --content-app: 80rem;
+  --public-gutter: clamp(1rem, 4vw, 2rem);
+
+  --radius-control: 0.75rem;
+  --radius-card: 1rem;
+  --radius-feature: 1.5rem;
+  --radius-board: clamp(0.75rem, 2vw, 1.125rem);
+  --shadow-1: 0 1px 2px rgb(28 33 30 / 6%);
+  --shadow-2: 0 12px 32px rgb(28 33 30 / 10%);
+  --shadow-dialog: 0 24px 64px rgb(28 33 30 / 18%);
+
+  --focus-width: 2px;
+  --focus-offset: 2px;
+  --motion-instant: 120ms;
+  --motion-control: 200ms;
+  --motion-panel: 280ms;
+  --motion-piece: 180ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+}
+
+@theme inline {
+  --color-canvas: var(--color-canvas);
+  --color-canvas-strong: var(--color-canvas-strong);
+  --color-surface: var(--color-surface);
+  --color-surface-inverse: var(--color-surface-inverse);
+  --color-ink: var(--color-ink);
+  --color-ink-muted: var(--color-ink-muted);
+  --color-ink-inverse: var(--color-ink-inverse);
+  --color-line: var(--color-line);
+  --color-accent: var(--color-accent);
+  --color-accent-strong: var(--color-accent-strong);
+  --color-sage: var(--color-sage);
+  --color-brass: var(--color-brass);
+  --color-danger: var(--color-danger);
+  --color-success: var(--color-success);
+  --font-display: var(--font-display);
+  --font-ui: var(--font-ui);
+  --radius-control: var(--radius-control);
+  --radius-card: var(--radius-card);
+  --radius-feature: var(--radius-feature);
+}

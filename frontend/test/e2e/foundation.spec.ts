@@ -4,10 +4,10 @@ test('public foundation route is usable', async ({ page }) => {
   await page.goto('/');
 
   await expect(
-    page.getByRole('heading', { name: 'Chess with the noise turned down.' }),
+    page.getByRole('heading', { name: 'A quieter way to play.' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: 'Enter the board' }),
+    page.getByRole('link', { name: 'Find a match' }),
   ).toHaveAttribute('href', '/play');
 });
 
@@ -15,9 +15,12 @@ test('health-neutral app shell deep-links directly', async ({ page }) => {
   await page.goto('/play');
 
   await expect(
-    page.getByRole('heading', { name: 'Your next game will begin here.' }),
+    page.getByRole('heading', { name: 'Good evening, SilentKnight482.' }),
   ).toBeVisible();
-  await expect(page.getByText('App shell online')).toBeVisible();
+  await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Preview a game' }),
+  ).toHaveAttribute('href', '/game/demo');
 });
 
 test('unknown routes render the product not-found state', async ({ page }) => {

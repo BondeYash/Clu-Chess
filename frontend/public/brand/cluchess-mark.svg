@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">CluChess knight mark</title>
+  <rect width="64" height="64" rx="20" fill="#262b27"/>
+  <path fill="#f7f3ea" d="M19 49h31v5H15v-3l4-2Zm4-4c1-6 4-11 9-15l-5-5 3-11c9 2 16 8 19 17l-6 3c-2-3-5-4-8-3 5 3 8 8 8 14H23Zm12-23a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+  <path fill="#d7b46a" d="m24 18 5-7 4 4-4 8-5-5Z"/>
+</svg>

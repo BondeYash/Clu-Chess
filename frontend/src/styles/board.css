@@ -1,0 +1,207 @@
+.board-frame {
+  background: var(--color-surface-inverse);
+  border-radius: var(--radius-board);
+  box-shadow: var(--shadow-2);
+  container-name: board-frame;
+  container-type: inline-size;
+  overflow: hidden;
+  padding: clamp(0.35rem, 1.2vw, 0.75rem);
+  width: 100%;
+}
+
+.chessboard {
+  aspect-ratio: 1;
+  border-radius: calc(var(--radius-board) - 0.25rem);
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  overflow: hidden;
+  position: relative;
+  touch-action: manipulation;
+  width: 100%;
+}
+
+.chess-row {
+  display: contents;
+}
+
+.chess-square {
+  align-items: center;
+  appearance: none;
+  border: 0;
+  color: var(--color-ink);
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  position: relative;
+}
+
+.chess-square--light {
+  background: var(--color-canvas-strong);
+}
+
+.chess-square--dark {
+  background: var(--color-sage);
+}
+
+.chess-square::before,
+.chess-square::after {
+  content: '';
+  inset: 8%;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.chess-square--last::before {
+  border: 2px solid var(--color-brass);
+}
+
+.chess-square--selected::before {
+  border: 3px solid var(--color-accent);
+  clip-path: polygon(
+    0 0,
+    34% 0,
+    34% 6%,
+    6% 6%,
+    6% 34%,
+    0 34%,
+    0 0,
+    66% 0,
+    100% 0,
+    100% 34%,
+    94% 34%,
+    94% 6%,
+    66% 6%,
+    66% 0,
+    100% 66%,
+    100% 100%,
+    66% 100%,
+    66% 94%,
+    94% 94%,
+    94% 66%,
+    100% 66%,
+    34% 100%,
+    0 100%,
+    0 66%,
+    6% 66%,
+    6% 94%,
+    34% 94%,
+    34% 100%
+  );
+}
+
+.chess-square--legal::after {
+  background: var(--color-accent-strong);
+  border-radius: 50%;
+  height: 18%;
+  inset: 41%;
+  width: 18%;
+}
+
+.chess-square--capture::after {
+  border: 3px solid var(--color-accent-strong);
+  border-radius: 50%;
+  inset: 12%;
+}
+
+.chess-square--check::after {
+  background: var(--color-danger);
+  clip-path: polygon(0 0, 44% 0, 0 44%);
+  inset: 0;
+}
+
+.chess-square--pending {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 5px,
+    color-mix(in srgb, var(--color-brass) 35%, transparent) 5px,
+    color-mix(in srgb, var(--color-brass) 35%, transparent) 10px
+  );
+}
+
+.chess-square:focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: -4px;
+  z-index: 4;
+}
+
+.chess-square[aria-disabled='true'] {
+  cursor: default;
+}
+
+.chess-coordinate {
+  color: currentColor;
+  font-size: clamp(0.5rem, 2.7cqi, 0.72rem);
+  font-weight: 700;
+  opacity: 0.68;
+  position: absolute;
+  z-index: 3;
+}
+
+.chess-coordinate--file {
+  bottom: 3%;
+  right: 5%;
+}
+
+.chess-coordinate--rank {
+  left: 5%;
+  top: 3%;
+}
+
+.chess-piece {
+  height: 82%;
+  pointer-events: none;
+  position: relative;
+  transition: transform var(--motion-piece) var(--ease-standard);
+  width: 82%;
+  z-index: 1;
+}
+
+.chess-piece--white {
+  color: var(--color-ink-inverse);
+  filter: drop-shadow(0 1px 0 var(--color-ink))
+    drop-shadow(1px 0 0 var(--color-ink)) drop-shadow(-1px 0 0 var(--color-ink));
+}
+
+.chess-piece--black {
+  color: var(--color-ink);
+  filter: drop-shadow(
+    0 1px 0 color-mix(in srgb, var(--color-surface) 55%, transparent)
+  );
+}
+
+.chessboard--readonly .chess-square {
+  cursor: default;
+}
+
+@media (forced-colors: active) {
+  .chess-square {
+    border: 1px solid CanvasText;
+    forced-color-adjust: none;
+  }
+
+  .chess-square--light {
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .chess-square--dark {
+    background: CanvasText;
+    color: Canvas;
+  }
+
+  .chess-square--selected::before,
+  .chess-square--last::before,
+  .chess-square--capture::after {
+    border-color: Highlight;
+  }
+
+  .chess-square--legal::after,
+  .chess-square--check::after {
+    background: Highlight;
+  }
+}

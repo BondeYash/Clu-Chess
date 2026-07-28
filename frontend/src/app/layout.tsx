@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 
 import { publicEnvironment } from '@/config/environment';
 
+import { displayFont, uiFont } from './fonts';
 import './globals.css';
 import { Providers } from './providers';
 
@@ -10,6 +11,9 @@ export const metadata: Metadata = {
   applicationName: 'Cluchess',
   description:
     'A calm, server-authoritative place to play a focused game of chess.',
+  icons: {
+    icon: '/icons/favicon.svg',
+  },
   metadataBase: new URL(publicEnvironment.NEXT_PUBLIC_APP_ORIGIN),
   title: {
     default: 'Cluchess',
@@ -25,7 +29,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body>
+      <body className={`${uiFont.variable} ${displayFont.variable}`}>
         <Providers>{children}</Providers>
       </body>
     </html>

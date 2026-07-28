@@ -1,8 +1,11 @@
 # Cluchess frontend
 
-Phase 1 provides a production-shaped Next.js App Router foundation on port 5173. It includes strict TypeScript, Tailwind CSS, TanStack Query, Zod
-environment validation, Vitest, Playwright, standalone container output, and
-the shared `@cluchess/protocol-v1` package.
+Phase 2 provides a high-fidelity, production-shaped Next.js App Router frontend
+on port 5173. It includes the semantic CluChess design system, accessible
+keyboard chessboard, responsive public and guest shells, Storybook, strict
+TypeScript, Tailwind CSS, TanStack Query, Zod environment validation, Vitest,
+Playwright, standalone container output, and the shared
+`@cluchess/protocol-v1` package.
 
 ## Local development
 
@@ -35,6 +38,10 @@ npm --prefix packages/protocol-v1 run verify
 npm --prefix frontend run verify
 npm --prefix frontend run test:e2e
 ```
+
+The current fixture routes are `/`, `/play`, `/game/demo`, `/learn`,
+`/learn/king`, and `/settings`. Phase 2 deliberately makes no live feature API
+calls; session and identity integration starts in Phase 3.
 
 The frontend package is intentionally independent from backend runtime code.
 Only the versioned transport package is shared.
