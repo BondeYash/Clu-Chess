@@ -476,6 +476,38 @@ svg {
   margin-bottom: var(--space-7);
 }
 
+.session-gate {
+  display: grid;
+  gap: var(--space-5);
+  margin: 0 auto;
+  max-width: 58rem;
+  padding-block: var(--space-5);
+}
+
+.active-game-notice {
+  align-items: flex-start;
+  border-color: var(--color-brass);
+  display: flex;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.active-game-notice svg {
+  color: var(--color-accent);
+  flex: 0 0 auto;
+}
+
+.active-game-notice h2,
+.active-game-notice p {
+  margin: 0;
+}
+
+.active-game-notice p {
+  color: var(--color-ink-muted);
+  line-height: 1.55;
+  margin-top: var(--space-1);
+}
+
 .page-heading h1 {
   font-size: clamp(var(--heading-xl), 4vw, 2.75rem);
   line-height: 1.05;
@@ -903,6 +935,35 @@ svg {
   gap: var(--space-5);
   grid-template-columns: minmax(0, 1fr);
   max-width: var(--content-form);
+}
+
+.setting-warning {
+  align-items: center;
+  color: var(--color-danger);
+  display: flex;
+  font-weight: 700;
+  gap: var(--space-2);
+}
+
+.settings-toast {
+  bottom: calc(var(--space-5) + env(safe-area-inset-bottom));
+  position: fixed;
+  right: var(--space-5);
+  z-index: 80;
+}
+
+.dialog-error {
+  background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface));
+  border: 1px solid
+    color-mix(in srgb, var(--color-danger) 42%, var(--color-line));
+  border-radius: var(--radius-control);
+  color: var(--color-danger);
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+}
+
+.dialog-error p {
+  margin: var(--space-1) 0 0;
 }
 
 .settings-section {

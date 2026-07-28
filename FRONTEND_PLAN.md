@@ -1,6 +1,6 @@
 # CluChess Frontend Architecture and Implementation Plan
 
-> **Status:** Phase 2 complete; Phase 3 ready to implement
+> **Status:** Phase 3 complete; Phase 4 ready to implement
 > **Backend authority:** [`Architecture.md`](Architecture.md), [`docs/protocol-v1.md`](docs/protocol-v1.md), and the implemented controllers/gateway
 > **Frontend scope:** Next.js App Router web client for anonymous identity, instant matchmaking, authoritative realtime chess, recovery, learning content, settings, and production operations
 > **Delivery model:** A separately deployable `frontend/` application in this repository, integrated with the existing NestJS backend through REST and Socket.IO protocol v1
@@ -1460,6 +1460,9 @@ Implement the visual language and accessible primitives before feature screens.
 - Board squares meet touch target and visual-state requirements.
 
 ### Phase 3 — REST foundation and anonymous session lifecycle
+
+> **Status:** Complete — accepted 2026-07-28
+> **Evidence:** [`docs/frontend/phase-3-acceptance.md`](docs/frontend/phase-3-acceptance.md)
 
 **Objective**
 

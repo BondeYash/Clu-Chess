@@ -1,10 +1,11 @@
 # Cluchess frontend
 
-Phase 2 provides a high-fidelity, production-shaped Next.js App Router frontend
-on port 5173. It includes the semantic CluChess design system, accessible
-keyboard chessboard, responsive public and guest shells, Storybook, strict
-TypeScript, Tailwind CSS, TanStack Query, Zod environment validation, Vitest,
-Playwright, standalone container output, and the shared
+Phase 3 provides a high-fidelity, production-shaped Next.js App Router frontend
+on port 5173 with a live anonymous-session lifecycle. It includes the semantic
+CluChess design system, accessible keyboard chessboard, responsive public and
+guest shells, a typed REST boundary, bounded idempotent session recovery,
+Storybook, strict TypeScript, Tailwind CSS, TanStack Query, Zod validation,
+Vitest, Playwright, standalone container output, and the shared
 `@cluchess/protocol-v1` package.
 
 ## Local development
@@ -39,9 +40,15 @@ npm --prefix frontend run verify
 npm --prefix frontend run test:e2e
 ```
 
-The current fixture routes are `/`, `/play`, `/game/demo`, `/learn`,
-`/learn/king`, and `/settings`. Phase 2 deliberately makes no live feature API
-calls; session and identity integration starts in Phase 3.
+The current routes are `/`, `/play`, `/game/demo`, `/learn`, `/learn/king`, and
+`/settings`. `/play`, `/settings`, and game routes are guest-gated and consume
+the live session APIs. The landing page performs cookie recovery without
+creating a guest until the visitor chooses a guest route.
+
+Session tokens and retry keys are per-tab values in `sessionStorage`; they must
+never be placed in URLs, logs, TanStack Query, `localStorage`, or IndexedDB. The
+full runtime and recovery contract is documented in
+[`../docs/frontend/session-lifecycle.md`](../docs/frontend/session-lifecycle.md).
 
 The frontend package is intentionally independent from backend runtime code.
 Only the versioned transport package is shared.

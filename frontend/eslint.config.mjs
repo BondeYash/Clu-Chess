@@ -14,6 +14,29 @@ export default defineConfig([
         { fixStyle: 'inline-type-imports' },
       ],
       '@typescript-eslint/no-explicit-any': 'error',
+      'no-restricted-globals': [
+        'error',
+        {
+          message:
+            'Use the typed API boundary instead of calling fetch directly.',
+          name: 'fetch',
+        },
+        {
+          message:
+            'Guest credentials must never be stored in origin-wide localStorage.',
+          name: 'localStorage',
+        },
+        {
+          message: 'Guest credentials must never be stored in IndexedDB.',
+          name: 'indexedDB',
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/lib/api/api-fetch.ts'],
+    rules: {
+      'no-restricted-globals': 'off',
     },
   },
   globalIgnores([

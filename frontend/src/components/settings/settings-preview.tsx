@@ -1,29 +1,72 @@
 'use client';
 
-import { RotateCcw } from 'lucide-react';
-import { useState } from 'react';
+import { RotateCcw, ShieldAlert } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
-import { Avatar, Button, Card, Dialog, Select, Switch } from '@/components/ui';
+import {
+  Avatar,
+  Button,
+  Card,
+  Dialog,
+  Select,
+  Switch,
+  Toast,
+} from '@/components/ui';
+import { useGuestSession } from '@/features/session/session-provider';
+import { presentApiError } from '@/lib/api/error-copy';
 
 export function SettingsPreview() {
+  const { isResetting, resetError, resetGuest, view } = useGuestSession();
   const [coordinates, setCoordinates] = useState(true);
   const [sound, setSound] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const [resetSucceeded, setResetSucceeded] = useState(false);
+  const resetCopy = resetError ? presentApiError(resetError) : undefined;
+  const ready = view.status === 'ready' ? view : undefined;
+
+  useEffect(() => {
+    if (!resetSucceeded) return;
+    const timer = window.setTimeout(() => setResetSucceeded(false), 4_000);
+    return () => window.clearTimeout(timer);
+  }, [resetSucceeded]);
+
+  if (!ready) return null;
+  const { guest } = ready;
+
+  async function confirmReset() {
+    try {
+      await resetGuest();
+      setResetOpen(false);
+      setResetSucceeded(true);
+    } catch {
+      // The mutation error remains in the dialog with a safe retry path.
+    }
+  }
 
   return (
     <>
+      {resetSucceeded ? (
+        <div className="settings-toast">
+          <Toast message="A new guest identity is ready" tone="success" />
+        </div>
+      ) : null}
       <div className="settings-layout">
         <Card as="section" className="settings-section">
           <h2 className="settings-section__heading">Your guest</h2>
           <div className="identity-card">
             <Avatar
-              label="SilentKnight482 avatar"
+              label={`${guest.name} avatar`}
               size="lg"
-              value="knight_amber_01"
+              value={guest.avatar}
             />
             <div>
-              <strong>SilentKnight482</strong>
-              <p>Fixture identity · expires in 11 hours</p>
+              <strong>{guest.name}</strong>
+              <p>
+                Temporary guest · expires{' '}
+                <time dateTime={guest.expiresAt}>
+                  {formatExpiry(guest.expiresAt)}
+                </time>
+              </p>
             </div>
           </div>
         </Card>
@@ -81,6 +124,12 @@ export function SettingsPreview() {
           <p className="muted">
             Guest identities cannot be recovered across devices or after expiry.
           </p>
+          {ready.activeGameId ? (
+            <p className="setting-warning">
+              <ShieldAlert aria-hidden="true" size={18} />
+              Resetting now abandons the active game immediately.
+            </p>
+          ) : null}
           <div>
             <Button onClick={() => setResetOpen(true)} variant="destructive">
               <RotateCcw aria-hidden="true" size={17} />
@@ -90,17 +139,45 @@ export function SettingsPreview() {
         </Card>
       </div>
       <Dialog
-        description="Your generated name and knight cannot be recovered. This fixture does not perform a backend mutation."
+        confirmLabel="Reset and create new guest"
+        confirmPending={isResetting}
+        description={
+          ready.activeGameId
+            ? 'Your generated name and knight cannot be recovered, and your active game will be abandoned immediately.'
+            : 'Your generated name and knight cannot be recovered after reset.'
+        }
         destructive
-        onClose={() => setResetOpen(false)}
+        onClose={() => {
+          if (!isResetting) setResetOpen(false);
+        }}
+        onConfirm={() => void confirmReset()}
         open={resetOpen}
         title="Start with a new identity?"
       >
         <p>
-          During a live game this action will also warn that the game is
-          abandoned immediately.
+          The old bearer token, pending request keys, active-game hint, and
+          guest-owned query data are cleared only after the server confirms the
+          reset.
         </p>
+        {resetCopy ? (
+          <div className="dialog-error" role="alert">
+            <strong>{resetCopy.title}</strong>
+            <p>{resetCopy.message}</p>
+            {resetCopy.correlationId ? (
+              <p>
+                Reference: <code>{resetCopy.correlationId}</code>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </Dialog>
     </>
   );
+}
+
+function formatExpiry(expiresAt: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(expiresAt));
 }

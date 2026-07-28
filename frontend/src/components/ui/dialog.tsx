@@ -8,18 +8,24 @@ import { IconButton } from './icon-button';
 
 export interface DialogProps {
   children: ReactNode;
+  confirmLabel?: string;
+  confirmPending?: boolean;
   description: string;
   destructive?: boolean;
   onClose: () => void;
+  onConfirm?: () => void;
   open: boolean;
   title: string;
 }
 
 export function Dialog({
   children,
+  confirmLabel = 'Confirm reset',
+  confirmPending = false,
   description,
   destructive = false,
   onClose,
+  onConfirm,
   open,
   title,
 }: DialogProps) {
@@ -56,17 +62,33 @@ export function Dialog({
           <h2 id={titleId}>{title}</h2>
           <p id={descriptionId}>{description}</p>
         </div>
-        <IconButton aria-label="Close dialog" onClick={onClose}>
+        <IconButton
+          aria-label="Close dialog"
+          disabled={confirmPending}
+          onClick={onClose}
+        >
           <X aria-hidden="true" size={20} />
         </IconButton>
       </div>
       <div className="dialog__body">{children}</div>
       <div className="dialog__actions">
-        <Button data-safe-action onClick={onClose} variant="secondary">
+        <Button
+          data-safe-action
+          disabled={confirmPending}
+          onClick={onClose}
+          variant="secondary"
+        >
           Cancel
         </Button>
         {destructive ? (
-          <Button variant="destructive">Confirm reset</Button>
+          <Button
+            onClick={onConfirm}
+            pending={confirmPending}
+            pendingLabel="Resetting identity…"
+            variant="destructive"
+          >
+            {confirmLabel}
+          </Button>
         ) : null}
       </div>
     </dialog>

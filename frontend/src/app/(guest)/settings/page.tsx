@@ -17,8 +17,8 @@ export default function SettingsPage() {
         <p className="eyebrow">Local preferences</p>
         <h1 className="display">Settings</h1>
         <p>
-          These controls are interactive fixtures. Persistence and identity
-          reset connect to the live session in Phase 3.
+          Board preferences remain local to this browser. Identity reset is
+          confirmed by the server and clears guest-owned state safely.
         </p>
       </header>
       <SettingsPreview />

@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
+import { installSessionMock } from './session-mock';
+
 const VISUAL_WIDTHS = [320, 390, 768, 1024, 1440] as const;
 const MAJOR_ROUTES = ['/', '/play', '/game/demo', '/learn/king', '/settings'];
 
@@ -8,6 +10,7 @@ for (const width of VISUAL_WIDTHS) {
   test(`game fixture matches the ${width}px visual contract`, async ({
     page,
   }) => {
+    await installSessionMock(page);
     await page.setViewportSize({ height: 900, width });
     await page.goto('/game/demo');
     await page.evaluate(() => document.fonts.ready);
@@ -30,6 +33,7 @@ for (const width of VISUAL_WIDTHS) {
 test('major Phase 2 routes have no automated accessibility violations', async ({
   page,
 }) => {
+  await installSessionMock(page);
   for (const route of MAJOR_ROUTES) {
     await page.goto(route);
     await page.evaluate(() => document.fonts.ready);
@@ -41,6 +45,7 @@ test('major Phase 2 routes have no automated accessibility violations', async ({
 });
 
 test('the board keyboard model works in the browser', async ({ page }) => {
+  await installSessionMock(page);
   await page.goto('/game/demo');
   const f3 = page.getByRole('gridcell', { name: /f3,/ });
   await f3.focus();
@@ -57,6 +62,7 @@ test('the board keyboard model works in the browser', async ({ page }) => {
 });
 
 test('forced-colour mode preserves explicit board state', async ({ page }) => {
+  await installSessionMock(page);
   await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'reduce' });
   await page.goto('/game/demo');
 
@@ -68,6 +74,7 @@ test('forced-colour mode preserves explicit board state', async ({ page }) => {
 });
 
 test('mobile controls and board targets remain operable', async ({ page }) => {
+  await installSessionMock(page);
   await page.setViewportSize({ height: 844, width: 390 });
   await page.goto('/play');
   await expect(
@@ -93,6 +100,7 @@ test('mobile controls and board targets remain operable', async ({ page }) => {
 test('font and image loading stay within the layout-shift budget', async ({
   page,
 }) => {
+  await installSessionMock(page);
   await page.addInitScript(() => {
     const metrics = globalThis as typeof globalThis & {
       __cluchessCumulativeLayoutShift: number;
@@ -131,6 +139,7 @@ test('font and image loading stay within the layout-shift budget', async ({
 test('content reflows at 200 percent without horizontal clipping', async ({
   page,
 }) => {
+  await installSessionMock(page);
   await page.setViewportSize({ height: 900, width: 768 });
   await page.goto('/settings');
   await page.evaluate(() => {

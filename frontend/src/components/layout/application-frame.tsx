@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 
 import { Wordmark } from '@/components/brand/wordmark';
 import { Avatar } from '@/components/ui/avatar';
+import { useOptionalGuestSession } from '@/features/session/session-provider';
 import { classNames } from '@/lib/class-names';
 
 import { ConnectionBadge } from './connection-badge';
@@ -19,6 +20,17 @@ const NAVIGATION = [
 
 export function ApplicationFrame({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? '/play';
+  const session = useOptionalGuestSession();
+  const readySession =
+    session?.view.status === 'ready' ? session.view : undefined;
+  const identityName = readySession?.guest.name ?? 'Preparing guest…';
+  const identityAvatar = readySession?.guest.avatar ?? 'knight_gray_02';
+  const connectionState =
+    session?.view.status === 'error' || session?.view.status === 'identity-lost'
+      ? 'unavailable'
+      : session?.view.status === 'ready'
+        ? 'session-ready'
+        : 'connecting';
   const focusMode = pathname.startsWith('/game/');
   const title = pathname.startsWith('/game/')
     ? 'Game'
@@ -64,10 +76,10 @@ export function ApplicationFrame({ children }: { children: ReactNode }) {
       <header className="application-header">
         <h1 className="application-header__title">{title}</h1>
         <div className="application-header__tools">
-          <ConnectionBadge />
+          <ConnectionBadge state={connectionState} />
           <div className="application-header__identity">
-            <Avatar size="sm" value="knight_amber_01" />
-            <span title="SilentKnight482">SilentKnight482</span>
+            <Avatar loading={!readySession} size="sm" value={identityAvatar} />
+            <span title={identityName}>{identityName}</span>
           </div>
         </div>
       </header>

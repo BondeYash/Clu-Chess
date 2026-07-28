@@ -1,7 +1,12 @@
 import { Badge } from '@/components/ui/badge';
 
 export type ConnectionState =
-  'connected' | 'connecting' | 'offline' | 'reconnecting' | 'unavailable';
+  | 'connected'
+  | 'connecting'
+  | 'offline'
+  | 'reconnecting'
+  | 'session-ready'
+  | 'unavailable';
 
 const COPY: Record<
   ConnectionState,
@@ -11,6 +16,7 @@ const COPY: Record<
   connecting: { label: 'Connecting…', tone: 'neutral' },
   offline: { label: 'Offline', tone: 'danger' },
   reconnecting: { label: 'Reconnecting…', tone: 'warning' },
+  'session-ready': { label: 'Session ready', tone: 'success' },
   unavailable: { label: 'Service unavailable', tone: 'danger' },
 };
 

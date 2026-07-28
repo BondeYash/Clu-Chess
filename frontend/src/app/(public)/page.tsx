@@ -1,8 +1,9 @@
-import { ArrowRight, ShieldCheck, TimerReset, UserRoundX } from 'lucide-react';
+import { ShieldCheck, TimerReset, UserRoundX } from 'lucide-react';
 import Link from 'next/link';
 
 import { ChessPiece } from '@/components/chess/chess-piece';
 import { buttonClassName } from '@/components/ui/button';
+import { GuestAwareCta } from '@/features/session/guest-aware-cta';
 
 const PRINCIPLES = [
   {
@@ -39,10 +40,7 @@ export default function HomePage() {
             on the board, and return safely if your connection stumbles.
           </p>
           <div className="hero__actions">
-            <Link className={buttonClassName()} href="/play">
-              Find a match
-              <ArrowRight aria-hidden="true" size={18} />
-            </Link>
+            <GuestAwareCta />
             <Link
               className={buttonClassName({ variant: 'secondary' })}
               href="/learn/king"

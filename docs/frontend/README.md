@@ -3,6 +3,7 @@
 > **Phase 0 status:** Complete — accepted 2026-07-28
 > **Phase 1 status:** Complete — accepted 2026-07-28
 > **Phase 2 status:** Complete — accepted 2026-07-28
+> **Phase 3 status:** Complete — accepted 2026-07-28
 > **Master plan:** [`../../FRONTEND_PLAN.md`](../../FRONTEND_PLAN.md)
 > **Backend contract:** [`../protocol-v1.md`](../protocol-v1.md)
 
@@ -12,6 +13,8 @@ independently verified Next.js runtime and extracted the shared protocol
 artifact without changing the backend's public wire contract. Phase 2
 implemented the responsive visual system, accessible component catalog, and
 high-fidelity fixture routes.
+Phase 3 added the typed REST boundary and the complete anonymous guest
+lifecycle against the live backend.
 
 ## Phase 0 artifacts
 
@@ -29,6 +32,8 @@ high-fidelity fixture routes.
 | [`phase-0-acceptance.md`](phase-0-acceptance.md)               | Evidence and acceptance checklist                                  |
 | [`phase-1-acceptance.md`](phase-1-acceptance.md)               | Runtime, contract, container, Compose, and regression evidence     |
 | [`phase-2-acceptance.md`](phase-2-acceptance.md)               | Design-system, responsive, accessibility, and visual-test evidence |
+| [`session-lifecycle.md`](session-lifecycle.md)                 | REST wiring, recovery order, retry, storage, and security contract |
+| [`phase-3-acceptance.md`](phase-3-acceptance.md)               | Anonymous-session implementation and verification evidence         |
 | [`validate-phase-0.mjs`](validate-phase-0.mjs)                 | Repeatable artifact, contract, link, contrast, and prototype check |
 | [`adr/`](adr/)                                                 | Accepted frontend architecture decision records                    |
 
