@@ -1,13 +1,15 @@
 import { Flag, ListOrdered } from 'lucide-react';
+import { gameIdParameterSchema } from '@cluchess/protocol-v1/http';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { DemoChessBoard } from '@/components/chess/demo-chessboard';
 import { PlayerBar } from '@/components/game/player-bar';
 import { Badge, Button } from '@/components/ui';
+import { GameRecoveryScreen } from '@/features/recovery/game-recovery-screen';
 
 export const metadata: Metadata = {
-  title: 'Demo game',
+  title: 'Game',
 };
 
 export default async function GamePage({
@@ -16,8 +18,12 @@ export default async function GamePage({
   params: Promise<{ gameId: string }>;
 }) {
   const { gameId } = await params;
-  if (gameId !== 'demo') notFound();
+  if (gameId === 'demo') return <DemoGame />;
+  if (!gameIdParameterSchema.safeParse(gameId).success) notFound();
+  return <GameRecoveryScreen gameId={gameId} />;
+}
 
+function DemoGame() {
   return (
     <div className="game-layout">
       <div className="game-stage">

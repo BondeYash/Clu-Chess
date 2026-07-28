@@ -39,10 +39,17 @@ export function PlaySessionView() {
             <h2>Active game protected</h2>
             <p>
               CluChess found an active assignment for this identity. Session
-              expiry will never replace it with a new guest; full board recovery
-              connects in Phase 4.
+              expiry will never replace it with a new guest; the authoritative
+              board is ready to recover.
             </p>
           </div>
+          <Link
+            className={buttonClassName({ variant: 'secondary' })}
+            href={`/game/${activeGameId}`}
+          >
+            Resume game
+            <ArrowRight aria-hidden="true" size={17} />
+          </Link>
         </Card>
       ) : null}
       <div className="lobby-grid">
@@ -99,8 +106,11 @@ export function PlaySessionView() {
               Server checked
             </span>
           </div>
-          <Link className={buttonClassName()} href="/game/demo">
-            Preview a game
+          <Link
+            className={buttonClassName()}
+            href={activeGameId ? `/game/${activeGameId}` : '/game/demo'}
+          >
+            {activeGameId ? 'Return to active game' : 'Preview a game'}
             <ArrowRight aria-hidden="true" size={18} />
           </Link>
         </Card>

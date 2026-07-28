@@ -3,6 +3,7 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 
+import { RealtimeProvider } from '@/features/recovery/realtime-provider';
 import { GuestSessionProvider } from '@/features/session/session-provider';
 import { createQueryClient } from '@/lib/query-client';
 
@@ -11,7 +12,9 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <GuestSessionProvider>{children}</GuestSessionProvider>
+      <GuestSessionProvider>
+        <RealtimeProvider>{children}</RealtimeProvider>
+      </GuestSessionProvider>
     </QueryClientProvider>
   );
 }

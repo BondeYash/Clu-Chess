@@ -14,6 +14,7 @@ html {
   background: var(--color-canvas);
   color: var(--color-ink);
   min-width: 320px;
+  scroll-padding-top: 5.5rem;
   scroll-behavior: smooth;
 }
 
@@ -468,6 +469,48 @@ svg {
   max-width: var(--content-app);
 }
 
+.transport-banner {
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-1);
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  margin: 0 auto var(--space-5);
+  max-width: var(--content-app);
+  padding: var(--space-3) var(--space-4);
+  position: sticky;
+  scroll-margin-top: 5.5rem;
+  top: calc(4.5rem + var(--space-2));
+  z-index: 20;
+}
+
+.transport-banner--reconnecting {
+  border-color: var(--color-brass);
+}
+
+.transport-banner--unavailable {
+  border-color: var(--color-danger);
+}
+
+.transport-banner > svg {
+  color: var(--color-accent);
+}
+
+.transport-banner__copy {
+  display: grid;
+  font-size: var(--type-body-sm);
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.transport-banner__copy span {
+  color: var(--color-ink-muted);
+  line-height: 1.4;
+}
+
 .mobile-nav {
   display: none;
 }
@@ -485,10 +528,11 @@ svg {
 }
 
 .active-game-notice {
-  align-items: flex-start;
+  align-items: center;
   border-color: var(--color-brass);
-  display: flex;
+  display: grid;
   gap: var(--space-4);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   margin-bottom: var(--space-5);
 }
 
@@ -717,6 +761,23 @@ svg {
   overflow: hidden;
 }
 
+.game-context--recovery {
+  align-self: start;
+  max-height: calc(100dvh - 9.5rem);
+  position: sticky;
+  scroll-margin-top: 6rem;
+  top: 5.25rem;
+}
+
+.application-main:has(> .transport-banner) .game-layout--recovery {
+  scroll-margin-top: 12rem;
+}
+
+.application-main:has(> .transport-banner) .game-context--recovery {
+  max-height: calc(100dvh - 15.25rem);
+  top: 11rem;
+}
+
 .game-context__section {
   border-bottom: 1px solid
     color-mix(in srgb, var(--color-ink-inverse) 14%, transparent);
@@ -755,6 +816,30 @@ svg {
   padding: 0;
 }
 
+.game-moves {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.move-scroll {
+  border-radius: var(--radius-control);
+  margin-top: var(--space-3);
+  min-height: 5rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-2);
+  scrollbar-color: var(--color-line) transparent;
+  scrollbar-width: thin;
+}
+
+.move-scroll .move-list {
+  margin: 0;
+  max-height: none;
+  overflow: visible;
+}
+
 .move-list li {
   display: grid;
   font-variant-numeric: tabular-nums;
@@ -771,6 +856,15 @@ svg {
   padding: var(--space-5);
 }
 
+.game-context--recovery .game-context__actions {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.game-context--recovery .game-context__actions .button {
+  width: 100%;
+}
+
 .game-context .button--quiet {
   color: var(--color-ink-inverse);
 }
@@ -783,6 +877,32 @@ svg {
   color: color-mix(in srgb, var(--color-ink-inverse) 58%, transparent);
   font-size: var(--type-body-sm);
   line-height: 1.45;
+}
+
+.game-context--recovery .game-context__hint {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.game-context--recovery .game-context__hint svg {
+  flex: 0 0 auto;
+}
+
+.game-recovery-summary__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.game-recovery-skeleton {
+  background: var(--color-surface-inverse);
+  border-radius: var(--radius-feature);
+  display: grid;
+  gap: var(--space-5);
+  min-height: 28rem;
+  padding: var(--space-5);
 }
 
 .lesson-shell {
@@ -1041,7 +1161,13 @@ svg {
   }
 
   .game-context {
+    max-height: none;
     min-height: 18rem;
+    position: static;
+  }
+
+  .move-scroll {
+    max-height: 18rem;
   }
 
   .lesson-grid {
@@ -1050,6 +1176,10 @@ svg {
 }
 
 @media (max-width: 47.999rem) {
+  html {
+    scroll-padding-top: 4.75rem;
+  }
+
   .public-header {
     min-height: 4rem;
   }
@@ -1131,6 +1261,17 @@ svg {
     padding-top: var(--space-5);
   }
 
+  .transport-banner {
+    grid-template-columns: auto minmax(0, 1fr);
+    position: static;
+    top: auto;
+  }
+
+  .transport-banner .button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
   .mobile-nav {
     background: var(--color-surface);
     border-top: 1px solid var(--color-line);
@@ -1191,6 +1332,23 @@ svg {
   .game-context {
     border-radius: var(--radius-card);
   }
+
+  .active-game-notice {
+    align-items: flex-start;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .active-game-notice .button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
+@media (max-height: 48rem) {
+  .game-context--recovery,
+  .transport-banner {
+    position: static;
+  }
 }
 
 @media (max-width: 29.999rem) {
@@ -1231,7 +1389,8 @@ svg {
   .desktop-rail,
   .match-card,
   .game-context,
-  .lesson-art {
+  .lesson-art,
+  .transport-banner {
     border: 2px solid CanvasText;
   }
 }

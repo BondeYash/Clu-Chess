@@ -1,6 +1,6 @@
 # CluChess Frontend Architecture and Implementation Plan
 
-> **Status:** Phase 3 complete; Phase 4 ready to implement
+> **Status:** Phase 4 complete; Phase 5 ready to implement
 > **Backend authority:** [`Architecture.md`](Architecture.md), [`docs/protocol-v1.md`](docs/protocol-v1.md), and the implemented controllers/gateway
 > **Frontend scope:** Next.js App Router web client for anonymous identity, instant matchmaking, authoritative realtime chess, recovery, learning content, settings, and production operations
 > **Delivery model:** A separately deployable `frontend/` application in this repository, integrated with the existing NestJS backend through REST and Socket.IO protocol v1
@@ -1512,6 +1512,9 @@ Create/recover/renew/reset guest identity safely and expose a stable guest sessi
 - Active identity expiry never silently moves an in-progress game to a new identity.
 
 ### Phase 4 — Realtime transport, recovery core, and app navigation
+
+> **Status:** Complete — accepted 2026-07-28
+> **Evidence:** [`docs/frontend/phase-4-acceptance.md`](docs/frontend/phase-4-acceptance.md)
 
 **Objective**
 

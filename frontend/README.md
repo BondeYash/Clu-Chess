@@ -1,12 +1,13 @@
 # Cluchess frontend
 
-Phase 3 provides a high-fidelity, production-shaped Next.js App Router frontend
-on port 5173 with a live anonymous-session lifecycle. It includes the semantic
+Phase 4 provides a high-fidelity, production-shaped Next.js App Router frontend
+on port 5173 with a live anonymous-session lifecycle, a lazy authenticated
+Socket.IO transport, and authoritative game recovery. It includes the semantic
 CluChess design system, accessible keyboard chessboard, responsive public and
-guest shells, a typed REST boundary, bounded idempotent session recovery,
-Storybook, strict TypeScript, Tailwind CSS, TanStack Query, Zod validation,
-Vitest, Playwright, standalone container output, and the shared
-`@cluchess/protocol-v1` package.
+guest shells, a typed REST and realtime boundary, bounded idempotent session
+recovery, reconnect reconciliation, Storybook, strict TypeScript, Tailwind CSS,
+TanStack Query, Zod validation, Zustand transport state, Vitest, Playwright,
+standalone container output, and the shared `@cluchess/protocol-v1` package.
 
 ## Local development
 
@@ -40,15 +41,20 @@ npm --prefix frontend run verify
 npm --prefix frontend run test:e2e
 ```
 
-The current routes are `/`, `/play`, `/game/demo`, `/learn`, `/learn/king`, and
-`/settings`. `/play`, `/settings`, and game routes are guest-gated and consume
-the live session APIs. The landing page performs cookie recovery without
-creating a guest until the visitor chooses a guest route.
+The current routes are `/`, `/play`, `/game/demo`, `/game/:gameId`, `/learn`,
+`/learn/king`, and `/settings`. `/play`, `/settings`, and game routes are
+guest-gated and consume the live session APIs. A UUID game route recovers an
+authoritative snapshot and opens one authenticated realtime connection; the
+demo and non-game routes keep the Socket.IO bundle deferred. The landing page
+performs cookie recovery without creating a guest until the visitor chooses a
+guest route.
 
 Session tokens and retry keys are per-tab values in `sessionStorage`; they must
 never be placed in URLs, logs, TanStack Query, `localStorage`, or IndexedDB. The
 full runtime and recovery contract is documented in
-[`../docs/frontend/session-lifecycle.md`](../docs/frontend/session-lifecycle.md).
+[`../docs/frontend/session-lifecycle.md`](../docs/frontend/session-lifecycle.md)
+and
+[`../docs/frontend/realtime-recovery.md`](../docs/frontend/realtime-recovery.md).
 
 The frontend package is intentionally independent from backend runtime code.
 Only the versioned transport package is shared.

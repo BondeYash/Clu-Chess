@@ -10,12 +10,15 @@ export interface SessionMockOptions {
   activeGameId?: string | null;
   createFirstVisit?: boolean;
   loseFirstCreateResponse?: boolean;
+  privateSnapshotStatus?: 403 | 404;
 }
 
 export interface SessionMockState {
   createKeys: string[];
   currentName(): string;
+  failSnapshots(value: boolean): void;
   resetKeys: string[];
+  snapshotCalls(): number;
 }
 
 export async function installSessionMock(
@@ -24,11 +27,14 @@ export async function installSessionMock(
     activeGameId = null,
     createFirstVisit = false,
     loseFirstCreateResponse = false,
+    privateSnapshotStatus,
   }: SessionMockOptions = {},
 ): Promise<SessionMockState> {
   let created = !createFirstVisit;
   let createAttempts = 0;
   let generation = 0;
+  let snapshotsFail = false;
+  let snapshotRequestCount = 0;
   const createKeys: string[] = [];
   const resetKeys: string[] = [];
 
@@ -96,6 +102,29 @@ export async function installSessionMock(
       return;
     }
 
+    if (
+      /^\/v1\/games\/[0-9a-f-]+\/snapshot$/i.test(pathname) &&
+      method === 'GET'
+    ) {
+      snapshotRequestCount += 1;
+      if (snapshotsFail) {
+        await route.abort('connectionrefused');
+        return;
+      }
+      if (privateSnapshotStatus) {
+        await fulfillError(
+          route,
+          privateSnapshotStatus === 403 ? 'NOT_A_PLAYER' : 'GAME_NOT_FOUND',
+          privateSnapshotStatus,
+          false,
+        );
+        return;
+      }
+      const gameId = pathname.split('/')[3] ?? '';
+      await fulfillJson(route, snapshot(gameId));
+      return;
+    }
+
     await route.fallback();
   });
 
@@ -103,7 +132,11 @@ export async function installSessionMock(
     createKeys,
     currentName: () =>
       generation === 0 ? 'SilentKnight482' : 'CopperBishop731',
+    failSnapshots: (value) => {
+      snapshotsFail = value;
+    },
     resetKeys,
+    snapshotCalls: () => snapshotRequestCount,
   };
 }
 
@@ -119,7 +152,7 @@ function guest(generation: number, includeIssuedAt: boolean) {
 
 async function fulfillError(
   route: Route,
-  code: 'UNAUTHORIZED',
+  code: 'GAME_NOT_FOUND' | 'NOT_A_PLAYER' | 'UNAUTHORIZED',
   status: number,
   retryable: boolean,
 ) {
@@ -131,6 +164,45 @@ async function fulfillError(
     },
     status,
   );
+}
+
+function snapshot(gameId: string) {
+  return {
+    clocks: {
+      blackMs: 287_000,
+      running: 'white',
+      serverTime: Date.now(),
+      whiteMs: 296_000,
+    },
+    correlationId,
+    currentFen:
+      'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3',
+    gameId,
+    gameVersion: 7,
+    initialFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+    moves: Array.from({ length: 40 }, (_, index) => ({
+      color: index % 2 === 0 ? 'white' : 'black',
+      ply: index + 1,
+      san: ['e4', 'e5', 'Nf3', 'Nc6'][index % 4],
+      uci: ['e2e4', 'e7e5', 'g1f3', 'b8c6'][index % 4],
+    })),
+    opponent: {
+      avatar: 'knight_black_01',
+      color: 'black',
+      connected: true,
+      name: 'NobleRook91',
+    },
+    result: null,
+    status: 'IN_PROGRESS',
+    termination: null,
+    turn: 'white',
+    you: {
+      avatar: 'knight_amber_01',
+      color: 'white',
+      connected: true,
+      name: 'SilentKnight482',
+    },
+  };
 }
 
 async function fulfillJson(route: Route, body: unknown, status = 200) {

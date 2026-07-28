@@ -4,6 +4,7 @@
 > **Phase 1 status:** Complete — accepted 2026-07-28
 > **Phase 2 status:** Complete — accepted 2026-07-28
 > **Phase 3 status:** Complete — accepted 2026-07-28
+> **Phase 4 status:** Complete — accepted 2026-07-28
 > **Master plan:** [`../../FRONTEND_PLAN.md`](../../FRONTEND_PLAN.md)
 > **Backend contract:** [`../protocol-v1.md`](../protocol-v1.md)
 
@@ -14,7 +15,9 @@ artifact without changing the backend's public wire contract. Phase 2
 implemented the responsive visual system, accessible component catalog, and
 high-fidelity fixture routes.
 Phase 3 added the typed REST boundary and the complete anonymous guest
-lifecycle against the live backend.
+lifecycle against the live backend. Phase 4 added the lazy authenticated
+realtime transport, independent HTTP recovery path, authoritative game
+deep-link, and responsive recovery experience.
 
 ## Phase 0 artifacts
 
@@ -34,6 +37,8 @@ lifecycle against the live backend.
 | [`phase-2-acceptance.md`](phase-2-acceptance.md)               | Design-system, responsive, accessibility, and visual-test evidence |
 | [`session-lifecycle.md`](session-lifecycle.md)                 | REST wiring, recovery order, retry, storage, and security contract |
 | [`phase-3-acceptance.md`](phase-3-acceptance.md)               | Anonymous-session implementation and verification evidence         |
+| [`realtime-recovery.md`](realtime-recovery.md)                 | Socket ownership, reconciliation, recovery, and UI behavior        |
+| [`phase-4-acceptance.md`](phase-4-acceptance.md)               | Realtime, recovery, responsive, security, and test evidence        |
 | [`validate-phase-0.mjs`](validate-phase-0.mjs)                 | Repeatable artifact, contract, link, contrast, and prototype check |
 | [`adr/`](adr/)                                                 | Accepted frontend architecture decision records                    |
 

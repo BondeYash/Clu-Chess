@@ -57,7 +57,7 @@ export interface DemoChessBoardProps {
   pending?: readonly Square[];
   position?: Partial<Record<Square, PieceCode>>;
   readOnly?: boolean;
-  selected?: Square;
+  selected?: Square | null;
 }
 
 export function DemoChessBoard({
@@ -78,9 +78,11 @@ export function DemoChessBoard({
     [orientation],
   );
   const [focusedIndex, setFocusedIndex] = useState(() =>
-    Math.max(squares.indexOf(initialSelected), 0),
+    Math.max(initialSelected ? squares.indexOf(initialSelected) : 0, 0),
   );
-  const [selected, setSelected] = useState<Square | undefined>(initialSelected);
+  const [selected, setSelected] = useState<Square | undefined>(
+    initialSelected ?? undefined,
+  );
   const squareRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   function focusIndex(nextIndex: number) {
@@ -109,7 +111,7 @@ export function DemoChessBoard({
       return;
     }
     if (event.key === 'Enter' || event.key === ' ') {
-      setSelected(squares[focusedIndex]);
+      if (!readOnly) setSelected(squares[focusedIndex]);
       event.preventDefault();
       return;
     }

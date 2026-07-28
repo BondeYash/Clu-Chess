@@ -1,14 +1,17 @@
 'use client';
 
 import { BookOpen, Settings, Swords } from 'lucide-react';
+import type { Route } from 'next';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 import { Wordmark } from '@/components/brand/wordmark';
 import { Avatar } from '@/components/ui/avatar';
+import { TransportBanner } from '@/features/recovery/transport-banner';
 import { useOptionalGuestSession } from '@/features/session/session-provider';
 import { classNames } from '@/lib/class-names';
+import { useTransportStore } from '@/stores/transport-store';
 
 import { ConnectionBadge } from './connection-badge';
 
@@ -23,13 +26,16 @@ export function ApplicationFrame({ children }: { children: ReactNode }) {
   const session = useOptionalGuestSession();
   const readySession =
     session?.view.status === 'ready' ? session.view : undefined;
+  const transportStatus = useTransportStore((state) => state.status);
   const identityName = readySession?.guest.name ?? 'Preparing guest…';
   const identityAvatar = readySession?.guest.avatar ?? 'knight_gray_02';
   const connectionState =
     session?.view.status === 'error' || session?.view.status === 'identity-lost'
       ? 'unavailable'
-      : session?.view.status === 'ready'
-        ? 'session-ready'
+      : readySession
+        ? transportStatus === 'idle'
+          ? 'session-ready'
+          : transportStatus
         : 'connecting';
   const focusMode = pathname.startsWith('/game/');
   const title = pathname.startsWith('/game/')
@@ -54,20 +60,28 @@ export function ApplicationFrame({ children }: { children: ReactNode }) {
         </div>
         <nav aria-label="Application" className="desktop-rail__nav">
           {NAVIGATION.map((item) => {
+            const href =
+              item.href === '/play' && readySession?.activeGameId
+                ? (`/game/${readySession.activeGameId}` as Route)
+                : item.href;
             const current =
               item.href === '/play'
-                ? pathname === '/play'
+                ? pathname === '/play' || pathname.startsWith('/game/')
                 : pathname.startsWith(item.href.replace('/king', ''));
             const Icon = item.icon;
             return (
               <Link
                 aria-current={current ? 'page' : undefined}
                 className="nav-item"
-                href={item.href}
+                href={href}
                 key={item.href}
               >
                 <Icon aria-hidden="true" size={21} />
-                <span>{item.label}</span>
+                <span>
+                  {item.href === '/play' && readySession?.activeGameId
+                    ? 'Resume'
+                    : item.label}
+                </span>
               </Link>
             );
           })}
@@ -84,24 +98,33 @@ export function ApplicationFrame({ children }: { children: ReactNode }) {
         </div>
       </header>
       <main className="application-main" id="application-content">
+        <TransportBanner />
         <div className="application-main__inner">{children}</div>
       </main>
       <nav aria-label="Application" className="mobile-nav">
         {NAVIGATION.map((item) => {
+          const href =
+            item.href === '/play' && readySession?.activeGameId
+              ? (`/game/${readySession.activeGameId}` as Route)
+              : item.href;
           const current =
             item.href === '/play'
-              ? pathname === '/play'
+              ? pathname === '/play' || pathname.startsWith('/game/')
               : pathname.startsWith(item.href.replace('/king', ''));
           const Icon = item.icon;
           return (
             <Link
               aria-current={current ? 'page' : undefined}
               className="nav-item"
-              href={item.href}
+              href={href}
               key={item.href}
             >
               <Icon aria-hidden="true" size={21} />
-              <span>{item.label}</span>
+              <span>
+                {item.href === '/play' && readySession?.activeGameId
+                  ? 'Resume'
+                  : item.label}
+              </span>
             </Link>
           );
         })}

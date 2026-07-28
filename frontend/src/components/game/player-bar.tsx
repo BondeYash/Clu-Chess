@@ -4,6 +4,7 @@ export function PlayerBar({
   avatar,
   clock,
   color,
+  connected = true,
   currentTurn = false,
   name,
   self = false,
@@ -11,6 +12,7 @@ export function PlayerBar({
   avatar: string;
   clock: string;
   color: 'Black' | 'White';
+  connected?: boolean;
   currentTurn?: boolean;
   name: string;
   self?: boolean;
@@ -26,7 +28,14 @@ export function PlayerBar({
           {name}
         </div>
         <div className="player-bar__meta">
-          {color} · {currentTurn ? 'Your turn' : 'Connected'}
+          {color} ·{' '}
+          {currentTurn
+            ? self
+              ? 'Your turn'
+              : 'To move'
+            : connected
+              ? 'Connected'
+              : 'Reconnecting'}
         </div>
       </div>
       <div>

@@ -2,6 +2,7 @@ export const queryKeys = {
   games: {
     active: ['games', 'active'] as const,
     all: ['games'] as const,
+    snapshot: (gameId: string) => ['games', 'snapshot', gameId] as const,
   },
   session: {
     all: ['session'] as const,

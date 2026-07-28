@@ -24,3 +24,10 @@ The session feature deliberately returns a public identity view model without
 the bearer token. The token and pending idempotency keys remain behind its
 `SessionStoragePort`, backed by per-tab `sessionStorage` with an in-memory
 fallback.
+
+The recovery feature owns route-level snapshot presentation and reconciliation
+orchestration. Complete snapshots remain in TanStack Query. The realtime
+service owns the single Socket.IO instance, command envelopes, acknowledgements,
+event validation, de-duplication, and heartbeat timer. The transport Zustand
+store contains connection status, safe issue metadata, and counters only; it
+never stores a board, token, guest, or opponent.

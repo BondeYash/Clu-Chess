@@ -62,6 +62,7 @@ export function GuestSessionProvider({ children }: { children: ReactNode }) {
     mutationFn: () => sessionCoordinator.resetAndCreate(),
     onSuccess: (next) => {
       queryClient.removeQueries({ queryKey: queryKeys.session.all });
+      queryClient.removeQueries({ queryKey: queryKeys.games.all });
       queryClient.setQueryData(key, next);
     },
   });
