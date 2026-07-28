@@ -1,0 +1,63 @@
+name: cluchess-qualification
+
+x-qualification-environment: &qualification-environment
+  DATABASE_POOL_MAX: '50'
+  GRACE_MS: '30000'
+  JOIN_DEADLINE_MS: '120000'
+  RL_CONNECTIONS_PER_IP: '5000'
+  RL_QUEUE_LIMIT: '100'
+  RL_SESSION_CREATE_LIMIT: '100000'
+  RL_SESSION_CREATE_WINDOW_MS: '60000'
+  TIME_INITIAL_MS: '1800000'
+  TIME_INCREMENT_MS: '0'
+
+services:
+  app-a:
+    restart: 'no'
+    environment:
+      <<: *qualification-environment
+
+  app-b:
+    restart: 'no'
+    environment:
+      <<: *qualification-environment
+
+  nginx:
+    restart: 'no'
+    volumes:
+      - ./docker/nginx/nginx.qualification.conf:/etc/nginx/nginx.conf:ro
+
+  qualification-client:
+    profiles: ['qualification']
+    image: cluchess-multi-development:local
+    pull_policy: never
+    depends_on:
+      app-image:
+        condition: service_completed_successfully
+      nginx:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://cluchess_runtime:cluchess_runtime_dev@postgres:5432/cluchess?schema=public
+      METRICS_BEARER_TOKEN_FILE: /run/secrets/cluchess/metrics-token
+      MULTI_BASE_URL: https://nginx
+      MULTI_ORIGIN: https://localhost:${MULTI_EDGE_PORT:-3543}
+      NODE_TLS_REJECT_UNAUTHORIZED: '0'
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ${QUALIFICATION_ARTIFACT_DIR:-./.artifacts/phase12}:/evidence
+      - jwt-keys:/run/secrets/cluchess:ro
+
+  artillery:
+    profiles: ['qualification']
+    image: cluchess-artillery:2.0.33
+    build:
+      context: ./backend/load-tests
+    depends_on:
+      nginx:
+        condition: service_healthy
+    environment:
+      LOAD_BASE_URL: https://nginx
+      LOAD_ORIGIN: https://localhost:${MULTI_EDGE_PORT:-3543}
+      NODE_TLS_REJECT_UNAUTHORIZED: '0'
+    volumes:
+      - ${QUALIFICATION_ARTIFACT_DIR:-./.artifacts/phase12}:/evidence

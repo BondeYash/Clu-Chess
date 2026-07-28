@@ -24,7 +24,7 @@ Validate the alert rules, alert exercises, dashboard JSON, and merged Compose
 model without starting the stack:
 
 ```bash
-npm run test:observability:docker
+npm --prefix backend run test:observability:docker
 ```
 
 ## Correlation and traces

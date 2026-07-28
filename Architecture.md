@@ -310,86 +310,47 @@ flowchart TB
 
 ---
 
-## 11. Suggested folder structure
+## 11. Repository and backend folder structure
 
-The repository is currently empty, so we adopt the recommended NestJS-idiomatic module layout verbatim.
+The backend and frontend are independent packages. Repository-level files own
+only shared contracts, documentation, and cross-package orchestration.
 
-```
+```text
 cluchess/
-├─ src/
-│  ├─ main.ts                      # bootstrap, graceful shutdown hooks
-│  ├─ app.module.ts
-│  ├─ modules/
-│  │  ├─ session/                  # guest session lifecycle + JWT
-│  │  │  ├─ session.module.ts
-│  │  │  ├─ session.controller.ts  # REST: create/renew/get/reset
-│  │  │  ├─ session.service.ts
-│  │  │  └─ dto/
-│  │  ├─ identity/                 # name gen, profanity filter, avatar
-│  │  │  ├─ identity.module.ts
-│  │  │  ├─ identity.service.ts
-│  │  │  ├─ name-generator.ts
-│  │  │  ├─ profanity.filter.ts
-│  │  │  └─ avatars.catalog.ts
-│  │  ├─ matchmaking/
-│  │  │  ├─ matchmaking.module.ts
-│  │  │  ├─ matchmaking.service.ts
-│  │  │  └─ lua/                    # *.lua atomic scripts
-│  │  ├─ realtime/
-│  │  │  ├─ realtime.module.ts
-│  │  │  ├─ chess.gateway.ts        # single namespace gateway
-│  │  │  ├─ ws-auth.middleware.ts
-│  │  │  ├─ envelope.validation.ts
-│  │  │  ├─ broadcast.service.ts
-│  │  │  └─ redis-io.adapter.ts     # Nest IoAdapter + streams adapter
-│  │  ├─ game/
-│  │  │  ├─ game.module.ts
-│  │  │  ├─ game.service.ts         # move tx + lifecycle
-│  │  │  ├─ game-state.machine.ts
-│  │  │  ├─ snapshot.service.ts
-│  │  │  ├─ timeout.scheduler.ts
-│  │  │  └─ dto/
-│  │  ├─ chess/
-│  │  │  ├─ chess.module.ts
-│  │  │  ├─ chess-engine.interface.ts
-│  │  │  └─ chessjs.engine.ts
-│  │  ├─ presence/
-│  │  │  ├─ presence.module.ts
-│  │  │  └─ presence.service.ts
-│  │  ├─ persistence/
-│  │  │  ├─ persistence.module.ts
-│  │  │  ├─ prisma.service.ts
-│  │  │  └─ repositories/
-│  │  └─ health/
-│  │     ├─ health.module.ts
-│  │     ├─ health.controller.ts
-│  │     └─ metrics.controller.ts
-│  ├─ common/
-│  │  ├─ protocol/                  # envelope, event names, error codes
-│  │  ├─ zod/                       # shared schemas
-│  │  ├─ config/                    # env schema + config service
-│  │  ├─ logging/                   # pino + correlation id
-│  │  ├─ redis/                     # ioredis provider + lua registry
-│  │  └─ telemetry/                 # otel setup
-├─ prisma/
-│  ├─ schema.prisma
-│  └─ migrations/
-├─ test/
-│  ├─ unit/
-│  ├─ integration/                  # testcontainers: pg + redis
-│  └─ e2e/                          # multi-instance socket tests
-├─ load-tests/
-│  ├─ artillery.socketio.yml
-│  └─ processors/                   # custom JS for matchmaking flow
+├─ backend/
+│  ├─ src/
+│  │  ├─ main.ts
+│  │  ├─ app.module.ts
+│  │  ├─ common/                    # config, logging, Redis, telemetry
+│  │  └─ modules/                   # session, realtime, game, chess, etc.
+│  ├─ prisma/                       # schema and migrations
+│  ├─ test/                         # unit and integration suites
+│  ├─ scripts/                      # backend operations and qualification
+│  ├─ load-tests/                   # Artillery package and scenarios
+│  ├─ observability/                # alerts, dashboards, and collectors
+│  ├─ postman/                      # executable HTTP and realtime examples
+│  ├─ Dockerfile
+│  ├─ package.json
+│  └─ tsconfig.json
+├─ frontend/
+│  ├─ src/                          # Next.js application and features
+│  ├─ e2e/
+│  ├─ public/
+│  ├─ Dockerfile
+│  └─ package.json
+├─ packages/
+│  └─ protocol-v1/                  # shared HTTP and Socket.IO contracts
 ├─ docs/
-│  ├─ adr/                          # accepted architecture decisions
-│  ├─ protocol-v1.md                # normative HTTP/WS contract
-│  └─ configuration.md              # zero-touch Docker/config contract
-├─ docker-compose.yml
-├─ Dockerfile
+├─ docker/
+├─ compose.yaml
+├─ compose.multi.yaml
 ├─ .env.example
 └─ Architecture.md
 ```
+
+The backend domain never imports frontend code. Both applications consume the
+versioned `packages/protocol-v1` boundary, and each owns its own lockfile,
+configuration, test suite, and production image.
 
 ---
 
@@ -1656,7 +1617,7 @@ Integration tests use **Testcontainers** (real Postgres + Redis) so constraint a
 
 **Objective:** verify §6 targets and the state machine under stress.
 
-**Profile — `load-tests/artillery.socketio.yml` (sketch):**
+**Profile — `backend/load-tests/artillery.socketio.yml` (sketch):**
 - **Ramp:** 0 → 2,000 concurrent Socket.IO connections over 5 min, hold 10 min.
 - **Scenario per virtual user:**
   1. `POST /v1/session` → obtain token.

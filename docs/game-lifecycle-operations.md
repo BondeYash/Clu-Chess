@@ -107,7 +107,7 @@ docker compose run --build --rm app npm run verify
 Run the disposable real PostgreSQL/Redis and two-instance suite:
 
 ```bash
-sh scripts/run-integration-tests.sh
+sh backend/scripts/run-integration-tests.sh
 ```
 
 The integration suite covers exact resignation replay, timeout, both no-show

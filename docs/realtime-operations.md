@@ -126,5 +126,5 @@ docker compose run --build --rm app npm run verify
 Run the real PostgreSQL/Redis and multi-instance transport suite:
 
 ```bash
-sh scripts/run-integration-tests.sh
+sh backend/scripts/run-integration-tests.sh
 ```

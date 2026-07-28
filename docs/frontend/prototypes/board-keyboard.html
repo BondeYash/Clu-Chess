@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CluChess keyboard board prototype</title>
+    <link rel="stylesheet" href="./board-keyboard.css" />
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">Phase 0 interaction prototype</p>
+      <h1>Keyboard chessboard</h1>
+      <p id="instructions">
+        Use arrow keys to move between squares. Press Enter or Space to select
+        the white knight on d4, then choose a marked target. Press Escape to
+        cancel.
+      </p>
+
+      <div
+        id="board"
+        class="board"
+        role="grid"
+        aria-label="Chessboard, white orientation"
+        aria-describedby="instructions"
+      ></div>
+
+      <p id="status" class="status" role="status" aria-live="polite">
+        Board ready. Focus d4 to try the interaction.
+      </p>
+
+      <section aria-labelledby="prototype-limits">
+        <h2 id="prototype-limits">Prototype limits</h2>
+        <p>
+          This artifact tests composite-grid focus, selection, legal-target,
+          capture-target, cancel, and announcement behavior. It is not a chess
+          rules engine and does not submit a move.
+        </p>
+      </section>
+    </main>
+
+    <script src="./board-keyboard.js"></script>
+  </body>
+</html>

@@ -1,0 +1,73 @@
+{
+  "name": "cluchess-frontend",
+  "version": "0.1.0",
+  "description": "Production web client for Cluchess",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=24.0.0 <25",
+    "npm": ">=11.0.0 <12"
+  },
+  "packageManager": "npm@11.16.0",
+  "scripts": {
+    "analyze": "ANALYZE=true next build",
+    "build": "next build",
+    "clean": "node -e \"require('node:fs').rmSync('.next',{force:true,recursive:true});require('node:fs').rmSync('coverage',{force:true,recursive:true});require('node:fs').rmSync('test-results',{force:true,recursive:true})\"",
+    "dev": "next dev --hostname 0.0.0.0 --port 5173",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint . --max-warnings=0",
+    "start": "next start --hostname 0.0.0.0 --port 5173",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run build"
+  },
+  "dependencies": {
+    "@cluchess/protocol-v1": "file:../packages/protocol-v1",
+    "@tanstack/react-query": "5.101.4",
+    "next": "16.2.12",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zustand": "5.0.14",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@next/bundle-analyzer": "16.2.12",
+    "@playwright/test": "1.62.0",
+    "@tailwindcss/postcss": "4.3.3",
+    "@testing-library/jest-dom": "7.0.0",
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.1",
+    "@types/node": "24.13.3",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "5.2.0",
+    "@vitest/coverage-v8": "4.1.10",
+    "eslint": "9.39.3",
+    "eslint-config-next": "16.2.12",
+    "eslint-config-prettier": "10.1.8",
+    "jsdom": "30.0.0",
+    "prettier": "3.9.6",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  },
+  "allowScripts": {
+    "@tailwindcss/oxide@4.3.3": true,
+    "esbuild@0.29.0": true,
+    "sharp@0.35.3": true,
+    "unrs-resolver@1.12.2": true
+  },
+  "overrides": {
+    "brace-expansion": "5.0.8",
+    "minimatch": "10.2.6",
+    "postcss": "8.5.23",
+    "sharp": "0.35.3"
+  }
+}

@@ -82,7 +82,7 @@ docker compose run --build --rm app npm run verify
 Run the disposable real-PostgreSQL/Redis and two-instance realtime suite:
 
 ```bash
-sh scripts/run-integration-tests.sh
+sh backend/scripts/run-integration-tests.sh
 ```
 
 The integration audit covers SHA reload, TTLs, FIFO scores, stale cleanup,

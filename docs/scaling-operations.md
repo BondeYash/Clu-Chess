@@ -31,7 +31,7 @@ account is required. The local edge certificate is intentionally self-signed.
 Run the isolated end-to-end topology verification with:
 
 ```bash
-npm run test:multi:docker
+npm --prefix backend run test:multi:docker
 ```
 
 The smoke creates sessions routed to both replicas and exercises every HTTP

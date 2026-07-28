@@ -1025,6 +1025,9 @@ Complete the security controls and make the service diagnosable, measurable, and
 
 ## Phase 12 — End-to-end, failure, and load qualification
 
+> **Status:** Qualification implementation complete — release-scale target,
+> stress, burst, and soak evidence remains candidate-specific and pending
+
 ### Objective
 
 Produce repeatable evidence that the backend meets correctness, recovery, security, and performance requirements at and beyond the MVP target.
@@ -1033,29 +1036,29 @@ Produce repeatable evidence that the backend meets correctness, recovery, securi
 
 #### Automated test pyramid
 
-- [ ] Complete unit suites for pure domain logic, schemas, identity, clocks, state transitions, and engine rules.
-- [ ] Complete real-PostgreSQL/Redis integration suites for constraints, transactions, Lua, TTLs, and reconciliation.
-- [ ] Complete single-instance WS end-to-end flows.
-- [ ] Complete multi-instance WS end-to-end flows behind the LB.
-- [ ] Complete dependency-kill and process-crash suites.
-- [ ] Remove flaky timing sleeps; use fake clocks, polling assertions, or bounded eventually conditions.
+- [x] Complete unit suites for pure domain logic, schemas, identity, clocks, state transitions, and engine rules.
+- [x] Complete real-PostgreSQL/Redis integration suites for constraints, transactions, Lua, TTLs, and reconciliation.
+- [x] Complete single-instance WS end-to-end flows.
+- [x] Complete multi-instance WS end-to-end flows behind the LB.
+- [x] Complete dependency-kill and process-crash suites.
+- [x] Remove flaky timing sleeps; use fake clocks, polling assertions, or bounded eventually conditions.
 
 #### Artillery load profile
 
-- [ ] Implement session bootstrap and authenticated Socket.IO connection.
+- [x] Implement session bootstrap and authenticated Socket.IO connection.
 - [ ] Ramp to 2,000 concurrent users/connections over five minutes and hold for ten minutes.
 - [ ] Sustain approximately 1,000 active rooms/games.
 - [ ] Run a separate 2,500-physical-socket stress step to exercise the documented multi-tab/headroom assumption.
-- [ ] Add queue churn: a subset leaves after randomized short waits.
-- [ ] Play scripted legal openings with unique `clientMoveId` and tracked versions.
-- [ ] Drive some games to a known checkmate.
+- [x] Add queue churn: a subset leaves after randomized short waits.
+- [x] Play scripted legal openings with unique `clientMoveId` and tracked versions.
+- [x] Drive some games to a known checkmate.
 - [ ] Hard-disconnect approximately 15% of virtual users and reconnect within grace.
-- [ ] Run through at least two app replicas and the production-like LB configuration.
-- [ ] Collect application, Redis, PostgreSQL, host, and LB metrics during the run.
+- [x] Run through at least two app replicas and the production-like LB configuration.
+- [x] Collect application, Redis, PostgreSQL, host, and LB metrics during the run.
 
 #### Correctness audits
 
-- [ ] Automate SQL assertions for:
+- [x] Automate SQL assertions for:
   - no duplicate `(game_id, client_move_id)`;
   - no duplicate/gapped ply sequence;
   - game version equals the accepted move count under the approved non-move-version rule;
@@ -1063,7 +1066,7 @@ Produce repeatable evidence that the backend meets correctness, recovery, securi
   - no guest in multiple active assignments;
   - every terminal game has a valid result and termination;
   - no non-terminal game has a terminal result.
-- [ ] Audit stuck Redis reservations, queue guards, grace keys, and user states after the run.
+- [x] Audit stuck Redis reservations, queue guards, grace keys, and user states after the run.
 
 #### Performance and resilience targets
 
@@ -1074,16 +1077,16 @@ Produce repeatable evidence that the backend meets correctness, recovery, securi
 - [ ] Commit-to-broadcast p95 ≤ 50 ms.
 - [ ] Reconnect + snapshot p95 ≤ 800 ms.
 - [ ] Demonstrate the hot path at a burst target of 500 committed moves/second or record the first measured bottleneck and capacity limit.
-- [ ] Zero duplicate accepted moves.
-- [ ] Zero double game assignments.
+- [x] Zero duplicate accepted moves in the failure and qualification smoke evidence.
+- [x] Zero double game assignments in the failure and qualification smoke evidence.
 - [ ] No unbounded event-loop lag, memory growth, Redis stream growth, or database pool starvation.
 - [ ] Tune connection pools, event loop, payloads, Redis scripts, and queries only from measured bottlenecks.
 
 #### Soak and release evidence
 
 - [ ] Run a longer lower-volume soak to detect leaks and stale state.
-- [ ] Save test versions, environment configuration, dashboards, reports, and audit outputs as release artifacts.
-- [ ] Record any accepted exceptions with an owner and follow-up criterion; correctness exceptions block release.
+- [x] Save test versions, environment configuration, dashboards, reports, and audit outputs as release artifacts.
+- [x] Record any accepted exceptions with an owner and follow-up criterion; correctness exceptions block release.
 
 ### Exit criteria
 
@@ -1192,7 +1195,7 @@ Deploy the MVP safely with controlled migrations, recovery procedures, monitorin
 ## 7. Test suite organization
 
 ```text
-test/
+backend/test/
 ├─ unit/
 │  ├─ common/
 │  ├─ identity/
@@ -1216,7 +1219,7 @@ test/
    ├─ chess-positions/
    └─ protocol/
 
-load-tests/
+backend/load-tests/
 ├─ artillery.socketio.yml
 ├─ processors/
 ├─ audits/

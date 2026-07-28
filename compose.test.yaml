@@ -2,6 +2,7 @@ services:
   test:
     build:
       context: .
+      dockerfile: backend/Dockerfile
       target: development
     command:
       - sh

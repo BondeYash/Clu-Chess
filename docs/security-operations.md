@@ -74,7 +74,7 @@ volume.
 Run all local security gates through Docker:
 
 ```bash
-npm run test:security:docker
+npm --prefix backend run test:security:docker
 ```
 
 The gate builds the production image, scans the repository with Gitleaks, scans
@@ -82,6 +82,7 @@ dependencies/IaC/secrets/licenses with Trivy, scans the final image for
 high/critical fixed vulnerabilities and secrets, and boots the image with a
 read-only filesystem.
 
-CI also runs `npm audit --audit-level=high`. GPL-2.0, GPL-3.0, and AGPL-3.0 are
+CI also runs `npm --prefix backend audit --audit-level=high`. GPL-2.0,
+GPL-3.0, and AGPL-3.0 are
 forbidden for shipped dependencies unless the project owner explicitly changes
 the license policy after legal review.

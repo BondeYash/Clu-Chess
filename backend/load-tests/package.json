@@ -1,0 +1,15 @@
+{
+  "name": "cluchess-load-qualification",
+  "private": true,
+  "dependencies": {
+    "artillery": "2.0.33",
+    "socket.io-client": "4.8.3"
+  },
+  "overrides": {
+    "brace-expansion": "5.0.8",
+    "filelist": "2.0.2",
+    "jake": "12.10.1",
+    "matcher-collection": "2.0.1",
+    "minimatch": "10.2.5"
+  }
+}

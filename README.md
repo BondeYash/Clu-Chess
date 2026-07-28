@@ -1,7 +1,23 @@
-# CluChess Backend
+# CluChess
 
-Server-authoritative anonymous real-time chess backend, implemented as a
-strictly typed NestJS modular monolith.
+Production-oriented anonymous real-time chess application. The NestJS backend
+and Next.js frontend are independent packages with separate dependency graphs,
+tooling, tests, and containers.
+
+## Repository layout
+
+```text
+Cluchess/
+├── backend/              # NestJS API, Socket.IO, Prisma, tests, and load tools
+├── frontend/             # Next.js App Router web application
+├── packages/protocol-v1/ # Shared, versioned HTTP and realtime contracts
+├── docs/                 # Architecture and operations documentation
+└── compose*.yaml         # Repository-level local and qualification orchestration
+```
+
+Run package-specific commands from the repository root with
+`npm --prefix backend ...` or `npm --prefix frontend ...`. Neither application
+depends on a root JavaScript package.
 
 ## Start locally
 
@@ -14,6 +30,7 @@ docker compose up --build
 The command builds the app, creates local Ed25519 signing keys, starts
 PostgreSQL 16 and Redis 7, deploys Prisma migrations, and serves:
 
+- frontend: <http://localhost:5173>
 - liveness: <http://localhost:3000/healthz>
 - readiness: <http://localhost:3000/readyz>
 - Prometheus metrics: <http://localhost:3000/metrics>
@@ -57,29 +74,41 @@ Run integration tests against isolated Testcontainers-managed PostgreSQL and
 Redis containers:
 
 ```bash
-sh scripts/run-integration-tests.sh
+sh backend/scripts/run-integration-tests.sh
 ```
 
 Run the isolated two-replica Nginx/WSS smoke, which exercises every HTTP route
 and the complete realtime game flow:
 
 ```bash
-npm run test:multi:docker
+npm --prefix backend run test:multi:docker
 ```
 
 Validate Prometheus alerts, alert exercises, dashboards, and the observability
 Compose model:
 
 ```bash
-npm run test:observability:docker
+npm --prefix backend run test:observability:docker
 ```
 
 Build and scan the exact production image, dependencies, licenses, repository
 secrets, and container configuration:
 
 ```bash
-npm run test:security:docker
+npm --prefix backend run test:security:docker
 ```
+
+Run the isolated process-crash, dependency-kill, correctness-audit, and
+Artillery qualification smoke:
+
+```bash
+npm --prefix backend run test:qualification:docker
+```
+
+The release-scale 2,000-user target, 2,500-socket stress, move burst, and soak
+profiles are Dockerized as `test:load:target`, `test:load:stress`,
+`test:load:burst`, and `test:load:soak`. Reports and datastore, load-balancer,
+application, and host metrics are retained under `.artifacts/phase12/`.
 
 Stop the stack while retaining local data:
 
@@ -90,7 +119,7 @@ docker compose down
 Explicitly reset only the CluChess development containers and named volumes:
 
 ```bash
-sh scripts/reset-local-docker.sh
+sh backend/scripts/reset-local-docker.sh
 ```
 
 See [Architecture.md](Architecture.md), [PLAN.md](PLAN.md), and
@@ -118,9 +147,16 @@ dependency drills are documented in
 Multi-replica routing, graceful drain, rolling restarts, and datastore scaling
 are documented in
 [docs/scaling-operations.md](docs/scaling-operations.md).
-Importable HTTP and Socket.IO Postman assets are in [postman](postman/README.md).
+Importable HTTP and Socket.IO Postman assets are in
+[backend/postman](backend/postman/README.md).
+Package-specific guidance is in [backend](backend/README.md) and
+[frontend](frontend/README.md). The phase-by-phase frontend roadmap is in
+[FRONTEND_PLAN.md](FRONTEND_PLAN.md).
 
 Security controls, telemetry, dashboards, alerts, and response procedures are
 documented in [docs/security-operations.md](docs/security-operations.md),
 [docs/observability-operations.md](docs/observability-operations.md), and
 [docs/observability-runbooks.md](docs/observability-runbooks.md).
+Failure injection, Artillery profiles, correctness audits, performance gates,
+and release evidence are documented in
+[docs/qualification-operations.md](docs/qualification-operations.md).

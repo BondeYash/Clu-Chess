@@ -111,7 +111,7 @@ and RTO, validation output, and follow-up actions.
 Docker is the only external prerequisite:
 
 ```bash
-sh scripts/run-integration-tests.sh
+sh backend/scripts/run-integration-tests.sh
 ```
 
 Vitest uses Testcontainers to start pinned PostgreSQL and Redis containers,
@@ -129,4 +129,4 @@ docker compose up --build
 The one-shot `migrate` service uses the migration role. The long-running `app`
 service receives only the runtime role. If the role bootstrap or migration
 changes, reset only the project-scoped local volumes with
-`sh scripts/reset-local-docker.sh`.
+`sh backend/scripts/reset-local-docker.sh`.

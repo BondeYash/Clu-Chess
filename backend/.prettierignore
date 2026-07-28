@@ -1,0 +1,11 @@
+Architecture.md
+PLAN.md
+coverage/
+dist/
+frontend/
+load-tests/
+node_modules/
+observability/
+packages/
+postman/
+src/generated/

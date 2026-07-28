@@ -132,7 +132,8 @@ Compose volumes unless intentional data reset is desired.
 
 ## Executable evidence
 
-`test/integration/recovery.spec.ts` covers HTTP authorization and membership,
+`backend/test/integration/recovery.spec.ts` covers HTTP authorization and
+membership,
 refresh after `FLUSHDB`, cache reconstruction, corrupt/stale key repair,
 concurrent reconciliation, terminal snapshot recovery after grace, Redis
 bypass/restoration, Redis-down durable moves, PostgreSQL-down closed move

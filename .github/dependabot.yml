@@ -1,0 +1,61 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      backend-development:
+        dependency-type: development
+      backend-runtime:
+        dependency-type: production
+
+  - package-ecosystem: npm
+    directory: /backend/load-tests
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      load-testing:
+        patterns:
+          - '*'
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      frontend-development:
+        dependency-type: development
+      frontend-runtime:
+        dependency-type: production
+
+  - package-ecosystem: npm
+    directory: /packages/protocol-v1
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      protocol:
+        patterns:
+          - '*'
+
+  - package-ecosystem: docker
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3

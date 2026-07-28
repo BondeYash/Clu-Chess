@@ -29,14 +29,14 @@ services:
         condition: service_started
     restart: unless-stopped
     volumes:
-      - ./observability/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+      - ./backend/observability/otel-collector.yaml:/etc/otelcol/config.yaml:ro
 
   tempo:
     image: grafana/tempo:2.10.5
     command: ['-config.file=/etc/tempo/config.yaml']
     restart: unless-stopped
     volumes:
-      - ./observability/tempo.yaml:/etc/tempo/config.yaml:ro
+      - ./backend/observability/tempo.yaml:/etc/tempo/config.yaml:ro
       - tempo-data:/var/tempo
 
   prometheus:
@@ -54,8 +54,8 @@ services:
       - '${PROMETHEUS_PORT:-9090}:9090'
     restart: unless-stopped
     volumes:
-      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./backend/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./backend/observability/alerts.yml:/etc/prometheus/alerts.yml:ro
       - jwt-keys:/run/secrets/cluchess:ro
       - prometheus-data:/prometheus
 
@@ -77,8 +77,8 @@ services:
       - '${GRAFANA_PORT:-3001}:3000'
     restart: unless-stopped
     volumes:
-      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./backend/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./backend/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
 
 volumes:

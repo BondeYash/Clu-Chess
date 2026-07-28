@@ -15,6 +15,7 @@ x-app-environment: &app-environment
   OTEL_ENABLED: 'false'
   PORT: '3000'
   REDIS_URL: redis://redis:6379
+  TRUST_PROXY_HOPS: '1'
   TZ: UTC
 
 x-app: &app
@@ -57,6 +58,7 @@ services:
     image: cluchess-multi-application:local
     build:
       context: .
+      dockerfile: backend/Dockerfile
       target: production
     command: ['node', '--version']
 
@@ -91,6 +93,7 @@ services:
     image: cluchess-multi-development:local
     build:
       context: .
+      dockerfile: backend/Dockerfile
       target: development
     command: ['node', 'scripts/generate-local-keys.mjs']
     environment:

@@ -96,7 +96,7 @@ docker compose run --build --rm app npm run verify
 Run disposable real PostgreSQL/Redis and two-instance realtime tests:
 
 ```bash
-sh scripts/run-integration-tests.sh
+sh backend/scripts/run-integration-tests.sh
 ```
 
 The integration suite audits exact duplicate replay, simultaneous same-version

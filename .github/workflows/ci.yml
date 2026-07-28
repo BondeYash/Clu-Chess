@@ -1,4 +1,4 @@
-name: Backend CI
+name: CluChess CI
 
 on:
   pull_request:
@@ -18,11 +18,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           cache: npm
-          node-version-file: .node-version
-      - run: npm ci
-      - run: npm run prisma:validate
-      - run: npm run verify
-      - run: npm audit --audit-level=high
+          cache-dependency-path: backend/package-lock.json
+          node-version-file: backend/.node-version
+      - run: npm --prefix backend ci
+      - run: npm --prefix backend run prisma:validate
+      - run: npm --prefix backend run verify
+      - run: npm --prefix backend audit --audit-level=high
+      - run: npm --prefix backend/load-tests audit --omit=dev --audit-level=high
 
   integration:
     name: PostgreSQL and Redis integration
@@ -33,10 +35,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           cache: npm
-          node-version-file: .node-version
-      - run: npm ci
-      - run: npm run prisma:generate
-      - run: npm run test:integration
+          cache-dependency-path: backend/package-lock.json
+          node-version-file: backend/.node-version
+      - run: npm --prefix backend ci
+      - run: npm --prefix backend run prisma:generate
+      - run: npm --prefix backend run test:integration
 
   container:
     name: Production container
@@ -45,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - run: docker build --target production --tag cluchess:${{ github.sha }} .
+      - run: docker build --file backend/Dockerfile --target production --tag cluchess:${{ github.sha }} .
       - run: test "$(docker image inspect cluchess:${{ github.sha }} --format '{{.Config.User}}')" = "node"
       - run: docker run --rm --read-only --tmpfs /tmp:size=16m cluchess:${{ github.sha }} node --version
 
@@ -55,7 +58,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - run: COMPOSE_PROGRESS=plain npm run test:multi:docker
+      - run: COMPOSE_PROGRESS=plain npm --prefix backend run test:multi:docker
 
   observability:
     name: Prometheus rules and observability manifests
@@ -65,8 +68,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version-file: .node-version
-      - run: npm run test:observability:docker
+          node-version-file: backend/.node-version
+      - run: npm --prefix backend run test:observability:docker
 
   security:
     name: Dependency, license, secret, and container scans
@@ -76,5 +79,87 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version-file: .node-version
-      - run: COMPOSE_PROGRESS=plain sh scripts/run-security-scans.sh cluchess:${{ github.sha }}
+          node-version-file: backend/.node-version
+      - run: COMPOSE_PROGRESS=plain sh backend/scripts/run-security-scans.sh cluchess:${{ github.sha }}
+
+  qualification:
+    name: Crash, dependency, audit, and Artillery smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+          node-version-file: backend/.node-version
+      - run: npm --prefix backend ci
+      - run: COMPOSE_PROGRESS=plain npm --prefix backend run test:qualification:docker
+      - name: Retain Phase 12 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-12-qualification-${{ github.sha }}
+          path: .artifacts/phase12/
+          if-no-files-found: error
+          retention-days: 14
+
+  frontend-quality:
+    name: Frontend contract, lint, type, unit, build, and audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          cache: npm
+          cache-dependency-path: |
+            packages/protocol-v1/package-lock.json
+            frontend/package-lock.json
+          node-version-file: frontend/.node-version
+      - run: npm --prefix packages/protocol-v1 ci
+      - run: npm --prefix packages/protocol-v1 run verify
+      - run: npm --prefix frontend ci
+      - run: npm --prefix frontend run verify
+      - run: npm --prefix frontend audit --audit-level=high
+
+  frontend-e2e:
+    name: Frontend Chromium smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          cache: npm
+          cache-dependency-path: |
+            packages/protocol-v1/package-lock.json
+            frontend/package-lock.json
+          node-version-file: frontend/.node-version
+      - run: npm --prefix packages/protocol-v1 ci
+      - run: npm --prefix packages/protocol-v1 run build
+      - run: npm --prefix frontend ci
+      - run: npm --prefix frontend exec -- playwright install --with-deps chromium
+      - run: npm --prefix frontend run test:e2e
+
+  frontend-container:
+    name: Frontend production container
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - run: docker build --file frontend/Dockerfile --target production --tag cluchess-web:${{ github.sha }} .
+      - run: test "$(docker image inspect cluchess-web:${{ github.sha }} --format '{{.Config.User}}')" = "node"
+      - run: docker run --detach --name cluchess-web-smoke --read-only --tmpfs /tmp:size=16m --publish 127.0.0.1:15173:5173 cluchess-web:${{ github.sha }}
+      - run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:15173/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs cluchess-web-smoke
+          exit 1
+      - if: always()
+        run: docker rm --force cluchess-web-smoke || true

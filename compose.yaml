@@ -31,6 +31,7 @@ services:
   keygen:
     build:
       context: .
+      dockerfile: backend/Dockerfile
       target: development
     command: ['node', 'scripts/generate-local-keys.mjs']
     environment:
@@ -45,6 +46,7 @@ services:
   migrate:
     build:
       context: .
+      dockerfile: backend/Dockerfile
       target: development
     command: ['npm', 'run', 'prisma:deploy']
     depends_on:
@@ -56,15 +58,25 @@ services:
   node-modules-init:
     build:
       context: .
+      dockerfile: backend/Dockerfile
       target: development
-    command: ['chown', '-R', 'node:node', '/workspace/node_modules']
+    command:
+      [
+        'chown',
+        '-R',
+        'node:node',
+        '/workspace/backend/node_modules',
+        '/workspace/packages/protocol-v1/node_modules',
+      ]
     user: '0:0'
     volumes:
-      - app-node-modules:/workspace/node_modules
+      - app-node-modules:/workspace/backend/node_modules
+      - protocol-node-modules:/workspace/packages/protocol-v1/node_modules
 
   app:
     build:
       context: .
+      dockerfile: backend/Dockerfile
       target: development
     command:
       - sh
@@ -88,7 +100,7 @@ services:
       JWT_PUBLIC_KEYS_DIR: /run/secrets/cluchess/public
       LOG_LEVEL: debug
       NODE_ENV: development
-      ORIGIN_ALLOWLIST: http://localhost:5173
+      ORIGIN_ALLOWLIST: ${ORIGIN_ALLOWLIST:-http://localhost:5173}
       OTEL_ENABLED: 'false'
       PORT: '3000'
       REDIS_URL: redis://redis:6379
@@ -108,12 +120,66 @@ services:
     ports:
       - '${APP_PORT:-3000}:3000'
     volumes:
-      - .:/workspace
-      - app-node-modules:/workspace/node_modules
+      - ./backend:/workspace/backend
+      - ./packages/protocol-v1:/workspace/packages/protocol-v1
+      - app-node-modules:/workspace/backend/node_modules
+      - protocol-node-modules:/workspace/packages/protocol-v1/node_modules
       - jwt-keys:/run/secrets/cluchess:ro
+
+  web-node-modules-init:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: development
+    command:
+      [
+        'chown',
+        '-R',
+        'node:node',
+        '/workspace/frontend/.next',
+        '/workspace/frontend/node_modules',
+      ]
+    user: '0:0'
+    volumes:
+      - frontend-next-cache:/workspace/frontend/.next
+      - frontend-node-modules:/workspace/frontend/node_modules
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: development
+    depends_on:
+      app:
+        condition: service_healthy
+      web-node-modules-init:
+        condition: service_completed_successfully
+    environment:
+      FRONTEND_DEPLOYMENT_ENV: local
+      NEXT_PUBLIC_API_ORIGIN: ${FRONTEND_API_ORIGIN:-http://localhost:3000}
+      NEXT_PUBLIC_APP_ORIGIN: ${FRONTEND_APP_ORIGIN:-http://localhost:5173}
+      NEXT_PUBLIC_BUILD_SHA: local-compose
+      NEXT_PUBLIC_ENABLE_DEVTOOLS: 'false'
+      NEXT_PUBLIC_FF_FRONTEND_TELEMETRY: 'false'
+      NEXT_PUBLIC_FF_LEARN_HUB: 'false'
+      NEXT_PUBLIC_FF_LESSON_HERO_ART: 'false'
+      NEXT_PUBLIC_FF_SOUND_EFFECTS: 'false'
+      NEXT_PUBLIC_PROTOCOL_VERSION: '1'
+      NEXT_PUBLIC_SOCKET_ORIGIN: ${FRONTEND_SOCKET_ORIGIN:-http://localhost:3000}
+      NODE_ENV: development
+      TZ: UTC
+    ports:
+      - '${WEB_PORT:-5173}:5173'
+    volumes:
+      - ./frontend:/workspace/frontend
+      - frontend-next-cache:/workspace/frontend/.next
+      - frontend-node-modules:/workspace/frontend/node_modules
 
 volumes:
   app-node-modules:
+  frontend-next-cache:
+  frontend-node-modules:
   jwt-keys:
   postgres-data:
+  protocol-node-modules:
   redis-data:
